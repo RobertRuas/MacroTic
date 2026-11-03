@@ -1,0 +1,25 @@
+import AppKit
+
+@main
+enum MacroTicApp {
+    static let appDelegate = AppDelegate()
+
+    static func main() {
+        let app = NSApplication.shared
+        app.setActivationPolicy(.regular)
+        app.delegate = appDelegate
+        app.run()
+    }
+}
+
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var windowController: MainWindowController!
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.regular)
+        windowController = MainWindowController()
+        NSApp.activate(ignoringOtherApps: true)
+    }
+}

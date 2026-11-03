@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:MacroTic}",
+            "name": "Debug MacroTic",
+            "target": "MacroTic",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug MacroTic"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:MacroTic}",
+            "name": "Release MacroTic",
+            "target": "MacroTic",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release MacroTic"
+        }
+    ]
+}

@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve dependencies
+        run: swift package resolve
+
+      - name: Build release binary
+        run: swift build -c release
+
+      - name: Package MacroTic.app
+        env:
+          APP_VERSION: ${{ steps.version.outputs.version }}
+          APP_OWNER: ${{ github.repository_owner }}
+          APP_REPO: ${{ github.event.repository.name }}
+          SPARKLE_PUBLIC_KEY: ${{ secrets.SPARKLE_PUBLIC_KEY }}
+        run: bash Scripts/package_app.sh
+
+      - name: Sign update and build appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: bash Scripts/build_appcast.sh
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" \
+            dist/*.zip dist/appcast.xml \
+            --title "MacroTic ${{ steps.version.outputs.version }}" \
+            --generate-notes
+
+      - name: Keep only the latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          CURRENT_TAG="${{ steps.version.outputs.tag }}"
+          for tag in $(gh release list --limit 100 --json tagName -q '.[].tagName'); do
+            if [ "$tag" != "$CURRENT_TAG" ]; then
+              echo "Deleting old release: $tag"
+              gh release delete "$tag" --yes
+            fi
+          done

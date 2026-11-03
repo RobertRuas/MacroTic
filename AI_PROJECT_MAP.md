@@ -4,7 +4,7 @@
 
 ## Project Overview
 
-- **What**: Native macOS app — a classic window with a sidebar navigation. No screens yet (detail area is empty).
+- **What**: Native macOS app — macro automation tool. Classic window with sidebar navigation, Home screen (macro list + creation), and Settings screen.
 - **Stack**: Swift 6.4, SwiftUI + AppKit hybrid, Swift Package Manager (no Xcode project)
 - **Target**: macOS 26+
 - **Language mode**: Swift 5 (SwiftUIMacros plugin is NOT available — `@State`, `@Binding`, `@Environment` cannot be used)
@@ -82,15 +82,32 @@ Sources/
 │                                  Behavior comes from Contents/Info.plist (see Packaging/Info.plist). No-op outside a packaged .app.
 ├── Models/
 │   ├── AppSection.swift           Sidebar entries (enum: id, title, icon). Add a case to add a sidebar row.
-│   └── AppState.swift             @Observable: selectedSection, updater.
+│   ├── AppState.swift             @Observable: selectedSection, updater, isCreatingMacro flag + macroDraft, macroStore, macroExecutor, actionRecorder, inspectorState, inspectorPanel. Methods: beginCreatingMacro(), saveMacro(), playMacro(), stopMacro(), toggleInspector(), startRecording(), stopRecording().
+│   ├── Macro.swift                Domain model (struct, Codable): id, name, details, iconName, steps:[MacroStep], createdAt, lastUsedAt, executionCount. Provides lastUsedLabel computed property. The finished macro a MacroDraft produces.
+│   ├── MacroExecutor.swift        @Observable execution engine. Runs macro steps sequentially using CGEvent (keyboard/mouse), NSWorkspace (apps/URLs). Tracks state (idle/running/paused/finished/error). Methods: execute(), pause(), resume(), stop(). Supports all MacroStepKind types.
+│   ├── ActionRecorder.swift       @Observable action recorder. Uses CGEvent tap (listenOnly) to capture clicks, keystrokes, scroll events into MacroStep array. Auto-inserts delay steps between actions. Methods: startRecording(), stopRecording(), makeDraft(). Produces a MacroDraft ready for editing.
+│   ├── InspectorState.swift       @Observable real-time mouse coordinate tracker. Uses NSEvent global monitor + timer to track mouseX/mouseY (in CGEvent coordinate space). Methods: start(), stop(), toggle().
+│   ├── MacroStore.swift           @Observable JSON persistence layer. Saves/loads macros to ~/Library/Application Support/MacroTic/macros.json. Methods: save, delete, markUsed, exportJSON, importJSON, exportURL. Provides recentlyUsed (top 3).
+│   ├── MacroStep.swift            One step in a macro (struct): id, kind, value, delay, clickX/clickY (for .click), dragStartX/Y + dragEndX/Y (for .dragAndDrop), scrollDirection + scrollAmount (for .scroll). Also defines ScrollDirection enum.
+│   ├── MacroStepKind.swift        Step types (enum: keyShortcut, typeText, click, delay, launchApp, openURL, dragAndDrop, scroll). Each provides title, icon, tint color, placeholder, and boolean flags: usesDelay, usesCoordinates, usesDragCoordinates, usesScroll, usesShortcutRecorder, usesWindowPicker, usesTextField.
+│   └── MacroDraft.swift           @Observable editor/form state for building a macro: name, details, iconName, steps, selectedStepID + add/remove/moveUp/moveDown/moveSelectedUp/moveSelectedDown, isValid, makeMacro(). Retained on AppState so edits survive view re-renders.
 └── Views/
-    ├── MainWindowView.swift       NavigationSplitView: sidebar List of AppSection (bound to state.selectedSection); detail shows HomeView for .home, SettingsView for .settings, empty otherwise.
+    ├── MainWindowView.swift       NavigationSplitView: sidebar List of AppSection (bound to state.selectedSection); detail shows HomeView(state:) for .home, SettingsView for .settings, empty otherwise.
+    ├── MacroEditor/
+    │   ├── CreateMacroView.swift      MACRO CREATION SCREEN. Shown as a .sheet from HomeView (580x520). Form over a MacroDraft: Identificação card (name + description) + Ações card (ordered step rows with selection highlight, "Adicionar" Menu listing all MacroStepKind, empty state) + footer (step count, Cancelar, Salvar). Keyboard shortcuts: ⌘↑/⌘↓ move selected step. Animated transitions on add/remove/reorder.
+    │   ├── MacroStepRowView.swift     One editable step row: colored kind icon, numbered title, specialized inline editor per kind (KeyShortcutRecorder for shortcuts, ScreenCoordinatePicker for click/drag, WindowPickerView for apps, Picker+Slider for scroll, TextField for text/URL, Slider for delay), selection highlight, and move-up/move-down/delete controls.
+    │   ├── ScreenCoordinatePicker.swift  AppKit overlay (NSPanel) for capturing screen coordinates. Single-click mode for .click steps; fluid click-drag-release mode for .dragAndDrop steps. Shows crosshair cursor, instruction HUD, markers (A/B) and dashed drag line.
+    │   ├── KeyShortcutRecorder.swift   NSViewRepresentable keyboard shortcut recorder. Captures modifier+key combos interactively. Displays human-readable symbols (⌘⌥⇧⌃ + key names).
+    │   └── WindowPickerView.swift     Floating panel listing open windows (via CGWindowListCopyWindowInfo). Filters out MacroTic and Window Server. Shows owner app + window title for selection.
+    ├── Inspector/
+    │   ├── InspectorPanelController.swift  AppKit NSPanel controller for the floating inspector. Shows/hides the panel, positions it top-right. Owns InspectorState lifecycle (start/stop on show/close).
+    │   └── InspectorPanelView.swift   SwiftUI content for the inspector panel: live X/Y coordinates (monospaced), active/inactive indicator, copy-to-clipboard button.
     ├── Home/
-    │   ├── HomeView.swift             HOME SCREEN. Composes ActionsRow (top) + MacroListView (bottom).
-    │   ├── StatsCardView.swift        ActionCardView component: clickable card with icon, title, color. Used by ActionsRow.
-    │   ├── StatsCardsRow.swift        ActionsRow: horizontal row of ActionCardView cards (Nova Macro, Inspetor, Gravar Ações).
-    │   ├── MacroListView.swift        Single macro list with two sections separated: "Usados Recentemente" (top 3) and "Todas as Macros". Shows empty states when no macros exist.
-    │   └── MacroRowView.swift         Single macro row component: name, description, last used, execution count. Used by MacroListView when macros exist.
+    │   ├── HomeView.swift             HOME SCREEN. Takes AppState. Composes ActionsRow (top) + execution banner (when running) + MacroListView (bottom). Hosts CreateMacroView .sheet. Wires all three action cards: Nova Macro, Inspetor, Gravar Ações.
+    │   ├── StatsCardView.swift        ActionCardView component: clickable card with icon, title, color, optional isActive state (pulse animation + tinted background). Used by ActionsRow.
+    │   ├── StatsCardsRow.swift        ActionsRow: horizontal row of ActionCardView cards. All three wired: Nova Macro (opens create sheet), Inspetor (toggles floating panel), Gravar Ações (starts/stops recording). Shows active states.
+    │   ├── MacroListView.swift        Takes MacroStore + MacroExecutor. Two sections: "Usados Recentemente" (top 3) and "Todas as Macros". Each row has play/stop buttons. Context menu with execute + delete.
+    │   └── MacroRowView.swift         Single macro row: icon, name, details, play/stop button, executionCount, lastUsedLabel, step count badge. Context menu: Executar + Apagar.
     └── Settings/
         └── SettingsView.swift     SETTINGS SCREEN. Single "Atualizações" card: current version (CFBundleShortVersionString) + "Verificar atualizações" button (state.updater.checkForUpdates()).
 ```
@@ -110,6 +127,11 @@ Sources/
 | Sparkle for auto-update | De facto standard for non-App-Store macOS apps. Handles update checks, EdDSA-verified downloads, and silent install (SUAutomaticallyUpdate) |
 | GitHub Releases "latest" redirect as feed URL | `releases/latest/download/appcast.xml` never changes, so Info.plist's SUFeedURL is static even though old releases get deleted on every tag push |
 | Ad-hoc codesign only (no Developer ID yet) | No Apple Developer account configured. First launch after install/update shows a Gatekeeper warning until a Developer ID + notarization is added |
+| JSON file for macro persistence | Macros saved as pretty-printed JSON at `~/Library/Application Support/MacroTic/macros.json`. Human-readable, easy to export/import. All models are `Codable` with ISO 8601 dates |
+| Interactive action editors per step kind | Each MacroStepKind uses a specialized editor: screen overlay for click/drag coordinates, NSView-based shortcut recorder for keyboard shortcuts, CGWindowList for window picker, Picker+Slider for scroll. No generic text fields for structured data |
+| CGEvent for macro execution | MacroExecutor uses CGEvent API to post keyboard, mouse, and scroll events at the HID system tap level. Requires Accessibility permission in System Settings |
+| CGEvent tap for action recording | ActionRecorder uses a listenOnly CGEvent tap (cgSessionEventTap) to capture user input without blocking events. Also requires Accessibility permission |
+| NSPanel for inspector | Inspector uses a floating NSPanel (utilityWindow + nonactivatingPanel) that stays above all windows and doesn't steal focus. Tracks mouse via NSEvent global monitor |
 
 ---
 

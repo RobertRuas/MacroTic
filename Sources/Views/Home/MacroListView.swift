@@ -1,37 +1,49 @@
 import SwiftUI
 
 struct MacroListView: View {
+    let store: MacroStore
+    let executor: MacroExecutor
+    let onPlay: (Macro) -> Void
+    let onStop: () -> Void
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            recentSection
-            Divider()
-            allSection
+            if store.macros.isEmpty {
+                emptyState
+            } else {
+                if !store.recentlyUsed.isEmpty {
+                    recentSection
+                    Divider()
+                }
+                allSection
+            }
         }
         .background(.background.secondary)
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
+    private var emptyState: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "tray")
+                .font(.largeTitle)
+                .foregroundStyle(.quaternary)
+            Text("Nenhuma macro criada")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            Text("Crie sua primeira macro para começar a automatizar.")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
+    }
+
     private var recentSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             sectionHeader("Usados Recentemente")
-            MacroRowView(
-                name: "Login Automático",
-                description: "Preenche email e senha no portal",
-                lastUsed: "Há 2 min",
-                executionCount: 47
-            )
-            MacroRowView(
-                name: "Exportar Relatório",
-                description: "Navega até relatórios e exporta PDF",
-                lastUsed: "Há 1 hora",
-                executionCount: 23
-            )
-            MacroRowView(
-                name: "Fechar Popups",
-                description: "Fecha todas as janelas de notificação",
-                lastUsed: "Há 3 horas",
-                executionCount: 112
-            )
+            ForEach(store.recentlyUsed) { macro in
+                macroRow(macro)
+            }
         }
         .padding(.horizontal, 12)
     }
@@ -39,38 +51,25 @@ struct MacroListView: View {
     private var allSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             sectionHeader("Todas as Macros")
-            MacroRowView(
-                name: "Login Automático",
-                description: "Preenche email e senha no portal",
-                lastUsed: "Há 2 min",
-                executionCount: 47
-            )
-            MacroRowView(
-                name: "Exportar Relatório",
-                description: "Navega até relatórios e exporta PDF",
-                lastUsed: "Há 1 hora",
-                executionCount: 23
-            )
-            MacroRowView(
-                name: "Fechar Popups",
-                description: "Fecha todas as janelas de notificação",
-                lastUsed: "Há 3 horas",
-                executionCount: 112
-            )
-            MacroRowView(
-                name: "Preencher Formulário",
-                description: "Preenche campos do cadastro de cliente",
-                lastUsed: "Ontem",
-                executionCount: 8
-            )
-            MacroRowView(
-                name: "Backup Diário",
-                description: "Copia arquivos para pasta de backup",
-                lastUsed: "2 dias atrás",
-                executionCount: 31
-            )
+            ForEach(store.macros) { macro in
+                macroRow(macro)
+            }
         }
         .padding(.horizontal, 12)
+    }
+
+    private func macroRow(_ macro: Macro) -> some View {
+        MacroRowView(
+            macro: macro,
+            isRunning: isRunningMacro(macro),
+            onPlay: { onPlay(macro) },
+            onStop: { onStop() },
+            onDelete: { store.delete(macro.id) }
+        )
+    }
+
+    private func isRunningMacro(_ macro: Macro) -> Bool {
+        executor.isRunning
     }
 
     private func sectionHeader(_ title: String) -> some View {

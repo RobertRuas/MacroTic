@@ -39,30 +39,6 @@ struct HomeView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(.background)
         .animation(.easeInOut(duration: 0.3), value: state.macroExecutor.isRunning)
-        .sheet(
-            isPresented: Binding(
-                get: { state.isCreatingMacro },
-                set: { state.isCreatingMacro = $0 }
-            )
-        ) {
-            CreateMacroView(
-                draft: state.macroDraft,
-                tester: state.actionTester,
-                executor: state.macroExecutor,
-                onRun: { macro in state.macroExecutor.execute(macro) },
-                onStopRun: { state.stopMacro() },
-                isEditing: state.isEditing,
-                existingNames: state.macroStore.macros
-                    .filter { $0.id != state.editingMacroID }
-                    .map { $0.name },
-                editingMacroID: state.editingMacroID,
-                onCancel: {
-                    state.editingMacroID = nil
-                    state.isCreatingMacro = false
-                },
-                onSave: { macro in state.saveMacro(macro) }
-            )
-        }
     }
 
     private var executionBanner: some View {

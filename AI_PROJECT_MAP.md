@@ -77,7 +77,13 @@ Sources/
 │   ├── MacroTicApp.swift          ENTRY POINT. @main enum MacroTicApp; AppDelegate creates MainWindowController
 │   │                              and quits when the last window closes.
 │   ├── MainWindowController.swift Creates the classic NSWindow (titled, closable, miniaturizable, resizable,
-│   │                              1040x700, min 820x520, centered, zoom/maximize disabled) hosting MainWindowView. Owns AppState.
+│   │                              750x510, min 750x510, centered, zoom/maximize disabled) hosting MainWindowView. Owns AppState.
+│   │                              Observes state.isCreatingMacro via withObservationTracking and swaps to a separate 680x540
+│   │                              editor window (titled "Nova Macro"/"Editar Macro", no zoom/miniaturize) that hosts
+│   │                              CreateMacroView; while the editor is open the main window is orderOut'd. windowShouldClose on
+│   │                              the editor is intercepted and routed to cancel (clears editingMacroID + isCreatingMacro,
+│   │                              returns false so AppDelegate's "terminate on last window closed" never fires with the main
+│   │                              window still hidden).
 │   └── UpdaterController.swift    SPARKLE WRAPPER. @Observable class around SPUStandardUpdaterController; starts on init.
 │                                  Behavior comes from Contents/Info.plist (see Packaging/Info.plist). No-op outside a packaged .app.
 ├── Models/
@@ -122,7 +128,7 @@ Sources/
     │   ├── InspectorPanelController.swift  AppKit NSPanel controller for the floating inspector. Shows/hides the panel, positions it top-right. Owns InspectorState lifecycle (start/stop on show/close).
     │   └── InspectorPanelView.swift   SwiftUI content for the inspector panel: live X/Y coordinates (monospaced), active/inactive indicator, copy-to-clipboard button.
     ├── Home/
-    │   ├── HomeView.swift             HOME SCREEN. Takes AppState. Composes ActionsRow (top) + execution banner (when running) + MacroListView (bottom). Hosts CreateMacroView .sheet. Wires all three action cards: Nova Macro, Inspetor, Gravar Ações.
+    │   ├── HomeView.swift             HOME SCREEN. Takes AppState. Composes ActionsRow (top) + execution banner (when running) + MacroListView (bottom). The macro editor is presented in a separate window by MainWindowController (not a sheet here). Wires all three action cards: Nova Macro, Inspetor, Gravar Ações.
     │   ├── StatsCardView.swift        ActionCardView component: clickable card with icon, title, color, optional isActive state (pulse animation + tinted background). Used by ActionsRow.
     │   ├── StatsCardsRow.swift        ActionsRow: horizontal row of ActionCardView cards. All three wired: Nova Macro (opens create sheet), Inspetor (toggles floating panel), Gravar Ações (starts/stops recording). Shows active states.
     │   ├── MacroListView.swift        Takes MacroStore + MacroExecutor. Two sections: "Usados Recentemente" (top 3) and "Todas as Macros". Each row has play/stop/edit/delete buttons. Animated insert/remove transitions. Context menu with execute + edit + delete.

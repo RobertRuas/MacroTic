@@ -6,6 +6,7 @@ final class AppState {
 
     var isCreatingMacro: Bool = false
     var macroDraft = MacroDraft()
+    var editingMacroID: UUID? = nil
 
     let macroStore = MacroStore()
     let macroExecutor = MacroExecutor()
@@ -18,14 +19,42 @@ final class AppState {
     @ObservationIgnored
     lazy var inspectorPanel = InspectorPanelController(inspectorState: inspectorState)
 
+    var isEditing: Bool { editingMacroID != nil }
+
     func beginCreatingMacro() {
+        editingMacroID = nil
         macroDraft = MacroDraft()
         isCreatingMacro = true
     }
 
+    func beginEditingMacro(_ macro: Macro) {
+        editingMacroID = macro.id
+        macroDraft = MacroDraft()
+        macroDraft.loadFrom(macro)
+        isCreatingMacro = true
+    }
+
     func saveMacro(_ macro: Macro) {
-        macroStore.save(macro)
+        if let editID = editingMacroID,
+           let original = macroStore.macros.first(where: { $0.id == editID }) {
+            let updated = macroDraft.makeMacro(
+                preservingID: editID,
+                createdAt: original.createdAt,
+                lastUsedAt: original.lastUsedAt,
+                executionCount: original.executionCount
+            )
+            macroStore.save(updated)
+        } else {
+            macroStore.save(macro)
+        }
+        editingMacroID = nil
         isCreatingMacro = false
+    }
+
+    func deleteMacro(_ id: UUID) {
+        withAnimation(.easeInOut(duration: 0.25)) {
+            macroStore.delete(id)
+        }
     }
 
     func playMacro(_ macro: Macro) {
@@ -47,6 +76,7 @@ final class AppState {
 
     func stopRecording() {
         actionRecorder.stopRecording()
+        editingMacroID = nil
         macroDraft = actionRecorder.makeDraft()
         isCreatingMacro = true
     }

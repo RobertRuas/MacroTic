@@ -50,6 +50,14 @@ final class MacroDraft {
         moveDown(id)
     }
 
+    func loadFrom(_ macro: Macro) {
+        name = macro.name
+        details = macro.details
+        iconName = macro.iconName
+        steps = macro.steps
+        selectedStepID = nil
+    }
+
     func makeMacro() -> Macro {
         Macro(
             name: trimmedName,
@@ -57,5 +65,19 @@ final class MacroDraft {
             iconName: iconName,
             steps: steps
         )
+    }
+
+    func makeMacro(preservingID id: UUID, createdAt: Date, lastUsedAt: Date?, executionCount: Int) -> Macro {
+        var macro = Macro(
+            id: id,
+            name: trimmedName,
+            details: details.trimmingCharacters(in: .whitespacesAndNewlines),
+            iconName: iconName,
+            steps: steps
+        )
+        macro.createdAt = createdAt
+        macro.lastUsedAt = lastUsedAt
+        macro.executionCount = executionCount
+        return macro
     }
 }

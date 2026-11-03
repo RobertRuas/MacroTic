@@ -2,8 +2,19 @@ import SwiftUI
 
 struct CreateMacroView: View {
     let draft: MacroDraft
+    var isEditing: Bool = false
+    var existingNames: [String] = []
+    var editingMacroID: UUID? = nil
     let onCancel: () -> Void
     let onSave: (Macro) -> Void
+
+    private var isDuplicateName: Bool {
+        let trimmed = draft.trimmedName.lowercased()
+        guard !trimmed.isEmpty else { return false }
+        return existingNames.contains { name in
+            name.lowercased() == trimmed
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -25,10 +36,10 @@ struct CreateMacroView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("Nova Macro")
+            Text(isEditing ? "Editar Macro" : "Nova Macro")
                 .font(.title2)
                 .fontWeight(.semibold)
-            Text("Dê um nome e monte a sequência de ações.")
+            Text(isEditing ? "Altere o nome ou a sequência de ações." : "Dê um nome e monte a sequência de ações.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -41,12 +52,33 @@ struct CreateMacroView: View {
         VStack(alignment: .leading, spacing: 8) {
             sectionTitle("Identificação")
             VStack(spacing: 0) {
-                TextField(
-                    "Nome da macro",
-                    text: Binding(get: { draft.name }, set: { draft.name = $0 })
-                )
-                .textFieldStyle(.plain)
-                .padding(.vertical, 10)
+                HStack {
+                    TextField(
+                        "Nome da macro",
+                        text: Binding(get: { draft.name }, set: { draft.name = $0 })
+                    )
+                    .textFieldStyle(.plain)
+                    .padding(.vertical, 10)
+
+                    if isDuplicateName {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                            .font(.caption)
+                            .help("Já existe uma macro com esse nome")
+                    }
+                }
+
+                if isDuplicateName {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.circle")
+                            .font(.caption2)
+                        Text("Já existe uma macro com esse nome.")
+                            .font(.caption2)
+                    }
+                    .foregroundStyle(.orange)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.bottom, 6)
+                }
 
                 Divider()
 
@@ -168,12 +200,12 @@ struct CreateMacroView: View {
             Spacer()
             Button("Cancelar", action: onCancel)
                 .keyboardShortcut(.cancelAction)
-            Button("Salvar") {
+            Button(isEditing ? "Salvar Alterações" : "Salvar") {
                 onSave(draft.makeMacro())
             }
             .keyboardShortcut(.defaultAction)
             .buttonStyle(.borderedProminent)
-            .disabled(!draft.isValid)
+            .disabled(!draft.isValid || isDuplicateName)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)

@@ -21,6 +21,12 @@ struct Macro: Identifiable, Hashable, Codable {
         self.executionCount = 0
     }
 
+    var createdAtLabel: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd/MM/yyyy HH:mm"
+        return formatter.string(from: createdAt)
+    }
+
     var lastUsedLabel: String {
         guard let date = lastUsedAt else { return "Nunca usado" }
         let interval = Date().timeIntervalSince(date)

@@ -21,6 +21,7 @@ struct HomeView: View {
 
             if state.macroExecutor.isRunning {
                 executionBanner
+                    .transition(.move(edge: .top).combined(with: .opacity))
             }
 
             ScrollView {
@@ -28,13 +29,16 @@ struct HomeView: View {
                     store: state.macroStore,
                     executor: state.macroExecutor,
                     onPlay: { macro in state.playMacro(macro) },
-                    onStop: { state.stopMacro() }
+                    onStop: { state.stopMacro() },
+                    onEdit: { macro in state.beginEditingMacro(macro) },
+                    onDelete: { id in state.deleteMacro(id) }
                 )
             }
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(.background)
+        .animation(.easeInOut(duration: 0.3), value: state.macroExecutor.isRunning)
         .sheet(
             isPresented: Binding(
                 get: { state.isCreatingMacro },
@@ -43,7 +47,15 @@ struct HomeView: View {
         ) {
             CreateMacroView(
                 draft: state.macroDraft,
-                onCancel: { state.isCreatingMacro = false },
+                isEditing: state.isEditing,
+                existingNames: state.macroStore.macros
+                    .filter { $0.id != state.editingMacroID }
+                    .map { $0.name },
+                editingMacroID: state.editingMacroID,
+                onCancel: {
+                    state.editingMacroID = nil
+                    state.isCreatingMacro = false
+                },
                 onSave: { macro in state.saveMacro(macro) }
             )
         }

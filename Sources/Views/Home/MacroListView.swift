@@ -5,21 +5,26 @@ struct MacroListView: View {
     let executor: MacroExecutor
     let onPlay: (Macro) -> Void
     let onStop: () -> Void
+    let onEdit: (Macro) -> Void
+    let onDelete: (UUID) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if store.macros.isEmpty {
                 emptyState
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
             } else {
                 if !store.recentlyUsed.isEmpty {
                     recentSection
                     Divider()
+                        .padding(.horizontal, 12)
                 }
                 allSection
             }
         }
         .background(.background.secondary)
         .clipShape(RoundedRectangle(cornerRadius: 8))
+        .animation(.easeInOut(duration: 0.3), value: store.macros.count)
     }
 
     private var emptyState: some View {
@@ -43,6 +48,10 @@ struct MacroListView: View {
             sectionHeader("Usados Recentemente")
             ForEach(store.recentlyUsed) { macro in
                 macroRow(macro)
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .top).combined(with: .opacity),
+                        removal: .move(edge: .leading).combined(with: .opacity)
+                    ))
             }
         }
         .padding(.horizontal, 12)
@@ -53,6 +62,10 @@ struct MacroListView: View {
             sectionHeader("Todas as Macros")
             ForEach(store.macros) { macro in
                 macroRow(macro)
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .top).combined(with: .opacity),
+                        removal: .move(edge: .leading).combined(with: .opacity)
+                    ))
             }
         }
         .padding(.horizontal, 12)
@@ -61,15 +74,12 @@ struct MacroListView: View {
     private func macroRow(_ macro: Macro) -> some View {
         MacroRowView(
             macro: macro,
-            isRunning: isRunningMacro(macro),
+            isRunning: executor.isRunning,
             onPlay: { onPlay(macro) },
             onStop: { onStop() },
-            onDelete: { store.delete(macro.id) }
+            onEdit: { onEdit(macro) },
+            onDelete: { onDelete(macro.id) }
         )
-    }
-
-    private func isRunningMacro(_ macro: Macro) -> Bool {
-        executor.isRunning
     }
 
     private func sectionHeader(_ title: String) -> some View {

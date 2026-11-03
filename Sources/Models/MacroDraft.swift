@@ -19,7 +19,8 @@ final class MacroDraft {
     }
 
     func add(_ kind: MacroStepKind) {
-        let step = MacroStep(kind: kind)
+        var step = MacroStep(kind: kind)
+        if kind == .delay { step.delay = 0.5 }
         steps.append(step)
         if kind == .typeText {
             StepFocusRequest.pendingStepID = step.id
@@ -37,6 +38,20 @@ final class MacroDraft {
                 DispatchQueue.main.async {
                     guard let self, let i = self.steps.firstIndex(where: { $0.id == step.id }) else { return }
                     self.steps[i].setClickPoint(point)
+                }
+            }
+        }
+        if kind == .dragAndDrop {
+            ScreenCoordinatePicker.pickDrag { [weak self] start, end in
+                DispatchQueue.main.async {
+                    guard let self, let i = self.steps.firstIndex(where: { $0.id == step.id }) else { return }
+                    var s = self.steps[i]
+                    s.dragStartX = start.x
+                    s.dragStartY = start.y
+                    s.dragEndX = end.x
+                    s.dragEndY = end.y
+                    s.value = "(\(Int(start.x)),\(Int(start.y))) → (\(Int(end.x)),\(Int(end.y)))"
+                    self.steps[i] = s
                 }
             }
         }

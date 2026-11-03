@@ -19,91 +19,36 @@ struct MacroStepRowView: View {
     private var kind: MacroStepKind { step.wrappedValue.kind }
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "line.3.horizontal")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.tertiary)
-                .frame(width: 16, height: 28)
-                .contentShape(Rectangle())
-                .help("Arraste para reordenar")
-                .draggable(step.wrappedValue.id.uuidString) {
-                    HStack(spacing: 8) {
-                        Image(systemName: kind.icon)
-                            .foregroundStyle(.white)
-                            .frame(width: 24, height: 24)
-                            .background(kind.tint, in: RoundedRectangle(cornerRadius: 6))
-                        Text("\(position + 1). \(kind.title)")
-                            .font(.subheadline)
-                    }
-                    .padding(8)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        HStack(alignment: .center, spacing: 10) {
+            dragHandle
+            kindBadge
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(kind.title)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Spacer(minLength: 4)
                 }
-
-            Image(systemName: kind.icon)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 28, height: 28)
-                .background(kind.tint, in: RoundedRectangle(cornerRadius: 7))
-
-            VStack(alignment: .leading, spacing: 5) {
-                Text("\(position + 1). \(kind.title)")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
                 editor
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            Spacer(minLength: 8)
-
-            HStack(spacing: 4) {
-                if isTesting {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Button(action: onTest) {
-                        Image(systemName: "play.fill")
-                    }
-                    .foregroundStyle(.green)
-                    .disabled(testDisabled)
-                    .help("Testar esta ação")
-                }
-
-                Button(action: onMoveUp) {
-                    Image(systemName: "chevron.up")
-                }
-                .disabled(position == 0)
-
-                Button(action: onMoveDown) {
-                    Image(systemName: "chevron.down")
-                }
-                .disabled(position == total - 1)
-
-                Button(action: onDuplicate) {
-                    Image(systemName: "doc.on.doc")
-                }
-                .foregroundStyle(.secondary)
-                .help("Duplicar ação")
-
-                Button(action: onRemove) {
-                    Image(systemName: "trash")
-                }
-                .foregroundStyle(.red)
-            }
-            .buttonStyle(IconActionButtonStyle())
-            .font(.system(size: 12, weight: .medium))
+            trailingControls
         }
+        .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .padding(.horizontal, 4)
         .background(
             isSelected
-                ? AnyShapeStyle(Color.accentColor.opacity(0.08))
-                : AnyShapeStyle(.clear),
-            in: RoundedRectangle(cornerRadius: 6)
+                ? AnyShapeStyle(Color.accentColor.opacity(0.10))
+                : AnyShapeStyle(.clear)
         )
         .overlay(alignment: .top) {
             Capsule()
                 .fill(Color.accentColor)
-                .frame(height: 3)
+                .frame(height: 2.5)
                 .opacity(isDropTarget ? 1 : 0)
-                .offset(y: -1)
+                .padding(.horizontal, 12)
         }
         .animation(.easeInOut(duration: 0.15), value: isDropTarget)
         .dropDestination(for: String.self) { items, _ in
@@ -111,6 +56,106 @@ struct MacroStepRowView: View {
             onReorder(id)
             return true
         } isTargeted: { onDropTargetChange($0) }
+    }
+
+    private var dragHandle: some View {
+        Image(systemName: "line.3.horizontal")
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(.tertiary)
+            .frame(width: 12, height: 28)
+            .contentShape(Rectangle())
+            .help("Arraste para reordenar")
+            .draggable(step.wrappedValue.id.uuidString) {
+                HStack(spacing: 6) {
+                    Image(systemName: kind.icon)
+                        .foregroundStyle(.white)
+                        .frame(width: 22, height: 22)
+                        .background(kind.tint, in: RoundedRectangle(cornerRadius: 6))
+                    Text(kind.title)
+                        .font(.caption.weight(.medium))
+                }
+                .padding(6)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+            }
+    }
+
+    private var kindBadge: some View {
+        ZStack(alignment: .bottomTrailing) {
+            Image(systemName: kind.icon)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 28, height: 28)
+                .background(kind.tint, in: RoundedRectangle(cornerRadius: 7))
+
+            Text("\(position + 1)")
+                .font(.system(size: 9, weight: .bold))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 1)
+                .background(Color.black.opacity(0.55), in: Capsule())
+                .offset(x: 4, y: 4)
+        }
+    }
+
+    private var trailingControls: some View {
+        HStack(spacing: 2) {
+            if isTesting {
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(width: 24, height: 24)
+            } else {
+                Button(action: onTest) {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(width: 24, height: 24)
+                }
+                .buttonStyle(IconActionButtonStyle(tint: .green))
+                .foregroundStyle(.green)
+                .disabled(testDisabled)
+                .help("Testar esta ação")
+            }
+
+            Menu {
+                Button {
+                    onMoveUp()
+                } label: {
+                    Label("Mover para cima", systemImage: "chevron.up")
+                }
+                .disabled(position == 0)
+
+                Button {
+                    onMoveDown()
+                } label: {
+                    Label("Mover para baixo", systemImage: "chevron.down")
+                }
+                .disabled(position == total - 1)
+
+                Button {
+                    onDuplicate()
+                } label: {
+                    Label("Duplicar", systemImage: "doc.on.doc")
+                }
+
+                Divider()
+
+                Button(role: .destructive) {
+                    onRemove()
+                } label: {
+                    Label("Remover", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .frame(width: 24, height: 24)
+            .help("Mais opções")
+        }
     }
 
     @ViewBuilder
@@ -133,9 +178,9 @@ struct MacroStepRowView: View {
     }
 
     private var delayEditor: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             TextField(
-                "ms",
+                "500",
                 value: Binding(
                     get: { Int((step.wrappedValue.delay * 1000).rounded()) },
                     set: { step.wrappedValue.delay = Double(max($0, 0)) / 1000 }
@@ -143,114 +188,87 @@ struct MacroStepRowView: View {
                 format: .number.grouping(.never)
             )
             .textFieldStyle(.roundedBorder)
-            .frame(width: 90)
+            .frame(width: 72)
             .multilineTextAlignment(.trailing)
+            .monospacedDigit()
+            .controlSize(.small)
 
             Text("ms")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            ForEach([100, 500, 1000, 2000], id: \.self) { ms in
-                Button("\(ms)") { step.wrappedValue.delay = Double(ms) / 1000 }
-                    .buttonStyle(.bordered)
-                    .controlSize(.mini)
-            }
+            Spacer(minLength: 0)
         }
     }
 
     private var textEditor: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        HStack(spacing: 8) {
             AutoFocusTextField(
                 stepID: step.wrappedValue.id,
                 placeholder: kind.placeholder,
                 text: step.value
             )
-            .frame(height: 24)
+            .frame(height: 22)
+            .frame(maxWidth: .infinity)
 
-            Picker("Modo", selection: step.textMode) {
+            Picker("", selection: step.textMode) {
                 ForEach(TextInputMode.allCases) { Text($0.title).tag($0) }
             }
-            .pickerStyle(.segmented)
             .labelsHidden()
-            .frame(maxWidth: 260)
+            .pickerStyle(.menu)
+            .frame(width: 130)
+            .controlSize(.small)
         }
     }
 
     private var shortcutEditor: some View {
-        let parsed = ShortcutKeyMap.parse(step.wrappedValue.value)
-        let flags = parsed?.flags ?? []
-        let keyName = parsed.flatMap { ShortcutKeyMap.displayName(for: $0.keyCode) } ?? ""
-
-        return VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Button {
-                    ShortcutCapturePicker.pickShortcut { shortcut in
-                        DispatchQueue.main.async { step.wrappedValue.value = shortcut }
-                    }
-                } label: {
-                    Label(
-                        step.wrappedValue.value.isEmpty ? "Capturar atalho" : "Recapturar",
-                        systemImage: "keyboard"
-                    )
+        HStack(spacing: 8) {
+            if step.wrappedValue.value.isEmpty {
+                Text("Nenhum atalho")
                     .font(.caption)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-
-                if !step.wrappedValue.value.isEmpty {
-                    Text(step.wrappedValue.value)
-                        .font(.callout)
-                        .fontWeight(.medium)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 5))
-                }
+                    .foregroundStyle(.tertiary)
+                    .italic()
+            } else {
+                Text(step.wrappedValue.value)
+                    .font(.system(.callout, design: .monospaced).weight(.semibold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 5))
             }
 
-            HStack(spacing: 6) {
-                ForEach(shortcutModifiers, id: \.symbol) { modifier in
-                    Toggle(modifier.symbol, isOn: Binding(
-                        get: { flags.contains(modifier.flag) },
-                        set: { isOn in
-                            var newFlags = flags
-                            if isOn { newFlags.insert(modifier.flag) } else { newFlags.remove(modifier.flag) }
-                            updateShortcut(flags: newFlags, keyName: keyName)
-                        }
-                    ))
-                    .toggleStyle(.button)
-                    .controlSize(.small)
-                    .help(modifier.name)
+            Button {
+                ShortcutCapturePicker.pickShortcut { shortcut in
+                    DispatchQueue.main.async { step.wrappedValue.value = shortcut }
                 }
-
-                Picker("Tecla", selection: Binding(
-                    get: { keyName },
-                    set: { updateShortcut(flags: flags, keyName: $0) }
-                )) {
-                    if keyName.isEmpty { Text("Tecla…").tag("") }
-                    ForEach(ShortcutKeyMap.allKeyNames, id: \.self) { Text($0).tag($0) }
-                }
-                .labelsHidden()
-                .frame(width: 110)
-                .controlSize(.small)
+            } label: {
+                Label(
+                    step.wrappedValue.value.isEmpty ? "Capturar" : "Recapturar",
+                    systemImage: "record.circle"
+                )
+                .font(.caption)
             }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+
+            Spacer(minLength: 0)
         }
-    }
-
-    private var shortcutModifiers: [(symbol: String, name: String, flag: CGEventFlags)] {
-        [("⌃", "Control", .maskControl), ("⌥", "Option", .maskAlternate), ("⇧", "Shift", .maskShift), ("⌘", "Command", .maskCommand)]
-    }
-
-    private func updateShortcut(flags: CGEventFlags, keyName: String) {
-        step.wrappedValue.value = ShortcutKeyMap.modifierSymbols(for: flags) + keyName
     }
 
     private var clickEditor: some View {
         HStack(spacing: 8) {
             if step.wrappedValue.hasCoordinates {
-                Text("x: \(Int(step.wrappedValue.clickX)), y: \(Int(step.wrappedValue.clickY))")
+                Text("x: \(Int(step.wrappedValue.clickX))  y: \(Int(step.wrappedValue.clickY))")
                     .font(.caption)
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 5))
+            } else {
+                Text("Sem posição")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .italic()
             }
 
             Button {
@@ -265,32 +283,37 @@ struct MacroStepRowView: View {
                 }
             } label: {
                 Label(
-                    step.wrappedValue.hasCoordinates ? "Recapturar" : "Capturar posição",
+                    step.wrappedValue.hasCoordinates ? "Recapturar" : "Capturar",
                     systemImage: "scope"
                 )
                 .font(.caption)
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
+
+            Spacer(minLength: 0)
         }
     }
 
     private var dragEditor: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        HStack(spacing: 6) {
             if step.wrappedValue.hasDragCoordinates {
-                HStack(spacing: 12) {
-                    Label("A: (\(Int(step.wrappedValue.dragStartX)), \(Int(step.wrappedValue.dragStartY)))", systemImage: "a.circle.fill")
-                        .font(.caption)
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
-                    Image(systemName: "arrow.right")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                    Label("B: (\(Int(step.wrappedValue.dragEndX)), \(Int(step.wrappedValue.dragEndY)))", systemImage: "b.circle.fill")
-                        .font(.caption)
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
-                }
+                Text("(\(Int(step.wrappedValue.dragStartX)), \(Int(step.wrappedValue.dragStartY)))")
+                    .font(.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                Image(systemName: "arrow.right")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                Text("(\(Int(step.wrappedValue.dragEndX)), \(Int(step.wrappedValue.dragEndY)))")
+                    .font(.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Sem trajeto")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .italic()
             }
 
             Button {
@@ -307,132 +330,136 @@ struct MacroStepRowView: View {
                 }
             } label: {
                 Label(
-                    step.wrappedValue.hasDragCoordinates ? "Recapturar" : "Clique e arraste na tela",
+                    step.wrappedValue.hasDragCoordinates ? "Recapturar" : "Capturar",
                     systemImage: "arrow.up.and.down.and.arrow.left.and.right"
                 )
                 .font(.caption)
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
+
+            Spacer(minLength: 0)
         }
     }
 
     private var scrollEditor: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Picker("Direção", selection: Binding(
-                    get: { step.wrappedValue.scrollDirection },
-                    set: { step.wrappedValue.scrollDirection = $0; refreshScrollLabel() }
-                )) {
-                    ForEach(ScrollDirection.allCases) { dir in
-                        Label(dir.title, systemImage: dir.icon).tag(dir)
+        HStack(spacing: 6) {
+            Picker("", selection: Binding(
+                get: { step.wrappedValue.scrollDirection },
+                set: { step.wrappedValue.scrollDirection = $0; refreshScrollLabel() }
+            )) {
+                ForEach(ScrollDirection.allCases) { dir in
+                    Label(dir.title, systemImage: dir.icon).tag(dir)
+                }
+            }
+            .labelsHidden()
+            .frame(width: 88)
+            .controlSize(.small)
+
+            TextField(
+                "3",
+                value: Binding(
+                    get: { Int(step.wrappedValue.scrollAmount) },
+                    set: { step.wrappedValue.scrollAmount = Double(min(max($0, 1), 100_000)); refreshScrollLabel() }
+                ),
+                format: .number.grouping(.never)
+            )
+            .textFieldStyle(.roundedBorder)
+            .multilineTextAlignment(.trailing)
+            .monospacedDigit()
+            .frame(width: 56)
+            .controlSize(.small)
+
+            Picker("", selection: Binding(
+                get: { step.wrappedValue.scrollUnit },
+                set: {
+                    let previous = step.wrappedValue.scrollUnit
+                    step.wrappedValue.scrollUnit = $0
+                    if previous != $0 {
+                        step.wrappedValue.scrollAmount = $0 == .pixels
+                            ? max(step.wrappedValue.scrollAmount * 100, 300)
+                            : min(max((step.wrappedValue.scrollAmount / 100).rounded(), 1), 100)
+                    }
+                    refreshScrollLabel()
+                }
+            )) {
+                ForEach(ScrollUnit.allCases) { Text($0.title).tag($0) }
+            }
+            .labelsHidden()
+            .frame(width: 80)
+            .controlSize(.small)
+
+            Button {
+                ScrollCapturePicker.pickScroll { result in
+                    DispatchQueue.main.async {
+                        var s = step.wrappedValue
+                        s.scrollDirection = result.direction
+                        s.scrollAmount = result.amount
+                        s.scrollUnit = .lines
+                        s.scrollMovesMouse = true
+                        s.scrollX = result.point.x
+                        s.scrollY = result.point.y
+                        s.value = s.scrollSummary
+                        step.wrappedValue = s
                     }
                 }
-                .labelsHidden()
-                .frame(width: 100)
+            } label: {
+                Image(systemName: "record.circle")
+                    .font(.caption)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .help("Gravar scroll")
 
-                numberField(
-                    value: Binding(
-                        get: { Int(step.wrappedValue.scrollAmount) },
-                        set: { step.wrappedValue.scrollAmount = Double(min(max($0, 1), 100_000)); refreshScrollLabel() }
-                    ),
-                    width: 70
-                )
+            Toggle(isOn: step.scrollMovesMouse) {
+                Image(systemName: "cursorarrow")
+                    .font(.caption)
+            }
+            .toggleStyle(.button)
+            .controlSize(.small)
+            .help("Mover mouse antes do scroll")
 
-                Picker("Unidade", selection: Binding(
-                    get: { step.wrappedValue.scrollUnit },
-                    set: {
-                        let previous = step.wrappedValue.scrollUnit
-                        step.wrappedValue.scrollUnit = $0
-                        if previous != $0 {
-                            step.wrappedValue.scrollAmount = $0 == .pixels
-                                ? max(step.wrappedValue.scrollAmount * 100, 300)
-                                : min(max((step.wrappedValue.scrollAmount / 100).rounded(), 1), 100)
-                        }
-                        refreshScrollLabel()
-                    }
-                )) {
-                    ForEach(ScrollUnit.allCases) { Text($0.title).tag($0) }
-                }
-                .labelsHidden()
-                .frame(width: 90)
-
+            if step.wrappedValue.scrollMovesMouse {
                 Button {
-                    ScrollCapturePicker.pickScroll { result in
+                    ScreenCoordinatePicker.pickPoint { point in
                         DispatchQueue.main.async {
-                            var s = step.wrappedValue
-                            s.scrollDirection = result.direction
-                            s.scrollAmount = result.amount
-                            s.scrollUnit = .lines
-                            s.scrollMovesMouse = true
-                            s.scrollX = result.point.x
-                            s.scrollY = result.point.y
-                            s.value = s.scrollSummary
-                            step.wrappedValue = s
+                            step.wrappedValue.scrollX = point.x
+                            step.wrappedValue.scrollY = point.y
                         }
                     }
                 } label: {
-                    Label("Gravar", systemImage: "record.circle")
+                    Image(systemName: "scope")
                         .font(.caption)
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
+                .help(step.wrappedValue.hasScrollPosition
+                      ? "x: \(Int(step.wrappedValue.scrollX)), y: \(Int(step.wrappedValue.scrollY))"
+                      : "Capturar posição do mouse")
             }
 
-            HStack(spacing: 8) {
-                Toggle("Mover mouse antes", isOn: step.scrollMovesMouse)
-                    .toggleStyle(.checkbox)
-                    .font(.caption)
-
-                if step.wrappedValue.scrollMovesMouse {
-                    if step.wrappedValue.hasScrollPosition {
-                        Text("x: \(Int(step.wrappedValue.scrollX)), y: \(Int(step.wrappedValue.scrollY))")
-                            .font(.caption)
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary)
-                    }
-                    Button {
-                        ScreenCoordinatePicker.pickPoint { point in
-                            DispatchQueue.main.async {
-                                step.wrappedValue.scrollX = point.x
-                                step.wrappedValue.scrollY = point.y
-                            }
-                        }
-                    } label: {
-                        Label(step.wrappedValue.hasScrollPosition ? "Recapturar" : "Capturar posição", systemImage: "scope")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
-            }
+            Spacer(minLength: 0)
         }
-    }
-
-    private func numberField(value: Binding<Int>, width: CGFloat) -> some View {
-        TextField("0", value: value, format: .number.grouping(.never))
-            .textFieldStyle(.roundedBorder)
-            .multilineTextAlignment(.trailing)
-            .monospacedDigit()
-            .frame(width: width)
-    }
-
-    private func refreshScrollLabel() {
-        step.wrappedValue.value = step.wrappedValue.scrollSummary
     }
 
     private var windowEditor: some View {
         let options = WindowCatalog.titles(including: step.wrappedValue.value)
-        return Picker(
-            "Janela",
-            selection: step.value
-        ) {
-            if step.wrappedValue.value.isEmpty {
-                Text("Selecionar janela…").tag("")
+        return HStack {
+            Picker("", selection: step.value) {
+                if step.wrappedValue.value.isEmpty {
+                    Text("Selecionar janela…").tag("")
+                }
+                ForEach(options, id: \.self) { Text($0).tag($0) }
             }
-            ForEach(options, id: \.self) { Text($0).tag($0) }
+            .labelsHidden()
+            .controlSize(.small)
+            .frame(maxWidth: 300)
+
+            Spacer(minLength: 0)
         }
-        .labelsHidden()
-        .frame(maxWidth: 280)
+    }
+
+    private func refreshScrollLabel() {
+        step.wrappedValue.value = step.wrappedValue.scrollSummary
     }
 }

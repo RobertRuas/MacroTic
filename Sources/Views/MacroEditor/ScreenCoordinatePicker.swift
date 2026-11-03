@@ -44,7 +44,8 @@ private final class CoordinatePickerWindow: NSPanel {
     private var instructionWindow: NSWindow?
     private var overlayView: PickerOverlayView?
 
-    private var dragStart: CGPoint?
+    private var dragStartNS: NSPoint?
+    private var dragStartCG: CGPoint?
     private var isDragging = false
 
     init(mode: PickerMode, onComplete: @escaping (PickerResult) -> Void) {
@@ -78,6 +79,11 @@ private final class CoordinatePickerWindow: NSPanel {
         makeKeyAndOrderFront(nil)
         NSCursor.crosshair.push()
         showInstruction()
+        overlayView?.updateCrosshair(convertPoint(fromScreen: NSEvent.mouseLocation))
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        overlayView?.updateCrosshair(convertPoint(fromScreen: NSEvent.mouseLocation))
     }
 
     private func showInstruction() {
@@ -135,16 +141,23 @@ private final class CoordinatePickerWindow: NSPanel {
         instructionWindow = win
     }
 
+    private func toCGEventCoordinates(_ nsPoint: NSPoint) -> CGPoint {
+        let screenHeight = NSScreen.main?.frame.height ?? 0
+        return CGPoint(x: nsPoint.x, y: screenHeight - nsPoint.y)
+    }
+
     override func mouseDown(with event: NSEvent) {
         let screenPoint = NSEvent.mouseLocation
+        let cgPoint = toCGEventCoordinates(screenPoint)
 
         switch mode {
         case .singleClick:
             overlayView?.addMarker(at: convertPoint(fromScreen: screenPoint), label: "●")
-            finishPicking(result: .point(screenPoint))
+            finishPicking(result: .point(cgPoint))
 
         case .drag:
-            dragStart = screenPoint
+            dragStartNS = screenPoint
+            dragStartCG = cgPoint
             isDragging = true
             overlayView?.addMarker(at: convertPoint(fromScreen: screenPoint), label: "A")
             showInstruction()
@@ -152,21 +165,21 @@ private final class CoordinatePickerWindow: NSPanel {
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard mode == .drag, isDragging else { return }
         let current = NSEvent.mouseLocation
-        if let start = dragStart {
-            overlayView?.updateDragLine(
-                from: convertPoint(fromScreen: start),
-                to: convertPoint(fromScreen: current)
-            )
-        }
+        overlayView?.updateCrosshair(convertPoint(fromScreen: current))
+        guard mode == .drag, isDragging, let startNS = dragStartNS else { return }
+        overlayView?.updateDragLine(
+            from: convertPoint(fromScreen: startNS),
+            to: convertPoint(fromScreen: current)
+        )
     }
 
     override func mouseUp(with event: NSEvent) {
-        guard mode == .drag, isDragging, let start = dragStart else { return }
-        let endPoint = NSEvent.mouseLocation
-        overlayView?.addMarker(at: convertPoint(fromScreen: endPoint), label: "B")
-        finishPicking(result: .drag(start, endPoint))
+        guard mode == .drag, isDragging, let startCG = dragStartCG else { return }
+        let endNS = NSEvent.mouseLocation
+        let endCG = toCGEventCoordinates(endNS)
+        overlayView?.addMarker(at: convertPoint(fromScreen: endNS), label: "B")
+        finishPicking(result: .drag(startCG, endCG))
     }
 
     override func keyDown(with event: NSEvent) {
@@ -197,6 +210,45 @@ private final class CoordinatePickerWindow: NSPanel {
 private final class PickerOverlayView: NSView {
 
     private var dragLine: (from: NSPoint, to: NSPoint)?
+    private var crosshair: NSPoint?
+
+    func updateCrosshair(_ point: NSPoint) {
+        crosshair = point
+        needsDisplay = true
+    }
+
+    private func drawCrosshair(at point: NSPoint) {
+        let vertical = NSBezierPath()
+        vertical.move(to: NSPoint(x: point.x, y: bounds.minY))
+        vertical.line(to: NSPoint(x: point.x, y: bounds.maxY))
+        let horizontal = NSBezierPath()
+        horizontal.move(to: NSPoint(x: bounds.minX, y: point.y))
+        horizontal.line(to: NSPoint(x: bounds.maxX, y: point.y))
+
+        for (color, width) in [(NSColor.white.withAlphaComponent(0.9), CGFloat(3)), (NSColor.systemRed, CGFloat(1))] {
+            color.setStroke()
+            for path in [vertical, horizontal] {
+                path.lineWidth = width
+                path.stroke()
+            }
+        }
+
+        let screenHeight = NSScreen.main?.frame.height ?? bounds.height
+        let text = "x: \(Int(point.x))  y: \(Int(screenHeight - point.y))"
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold),
+            .foregroundColor: NSColor.white
+        ]
+        let str = NSAttributedString(string: text, attributes: attrs)
+        let size = str.size()
+        var origin = NSPoint(x: point.x + 16, y: point.y - 28)
+        if origin.x + size.width + 12 > bounds.maxX { origin.x = point.x - size.width - 28 }
+        if origin.y < bounds.minY + 4 { origin.y = point.y + 16 }
+        let bg = NSRect(x: origin.x - 6, y: origin.y - 3, width: size.width + 12, height: size.height + 6)
+        NSColor.black.withAlphaComponent(0.75).setFill()
+        NSBezierPath(roundedRect: bg, xRadius: 5, yRadius: 5).fill()
+        str.draw(at: origin)
+    }
 
     override func draw(_ dirtyRect: NSRect) {
         NSColor.black.withAlphaComponent(0.01).setFill()
@@ -211,6 +263,10 @@ private final class PickerOverlayView: NSView {
             path.lineWidth = 2
             path.setLineDash([6, 4], count: 2, phase: 0)
             path.stroke()
+        }
+
+        if let crosshair {
+            drawCrosshair(at: crosshair)
         }
     }
 

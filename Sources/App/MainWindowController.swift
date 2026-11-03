@@ -7,13 +7,13 @@ final class MainWindowController {
 
     init() {
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 720, height: 480),
+            contentRect: NSRect(x: 0, y: 0, width: 1040, height: 700),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.title = "MacroTic"
-        window.contentMinSize = NSSize(width: 560, height: 380)
+        window.contentMinSize = NSSize(width: 820, height: 520)
         window.contentView = NSHostingView(rootView: MainWindowView(state: state))
         window.standardWindowButton(.zoomButton)?.isEnabled = false
         window.center()

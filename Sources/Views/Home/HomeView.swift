@@ -47,6 +47,10 @@ struct HomeView: View {
         ) {
             CreateMacroView(
                 draft: state.macroDraft,
+                tester: state.actionTester,
+                executor: state.macroExecutor,
+                onRun: { macro in state.macroExecutor.execute(macro) },
+                onStopRun: { state.stopMacro() },
                 isEditing: state.isEditing,
                 existingNames: state.macroStore.macros
                     .filter { $0.id != state.editingMacroID }
@@ -66,7 +70,9 @@ struct HomeView: View {
             ProgressView()
                 .controlSize(.small)
             if case .running(let step, let total) = state.macroExecutor.state {
-                Text("Executando passo \(step + 1) de \(total)...")
+                Text(state.macroExecutor.totalRepetitions > 1
+                     ? "Repetição \(state.macroExecutor.currentRepetition)/\(state.macroExecutor.totalRepetitions) · passo \(step + 1) de \(total)..."
+                     : "Executando passo \(step + 1) de \(total)...")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

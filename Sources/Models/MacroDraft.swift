@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 
 @Observable
 final class MacroDraft {
@@ -6,7 +6,9 @@ final class MacroDraft {
     var details: String = ""
     var iconName: String = "command.circle.fill"
     var steps: [MacroStep] = []
-    var selectedStepID: UUID? = nil
+    var intervalBetweenSteps: Double = 0.5
+    var repeatCount: Int = 1
+    var dropTargetID: UUID? = nil
 
     var trimmedName: String {
         name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -19,15 +21,29 @@ final class MacroDraft {
     func add(_ kind: MacroStepKind) {
         let step = MacroStep(kind: kind)
         steps.append(step)
-        selectedStepID = step.id
+        if kind == .typeText {
+            StepFocusRequest.pendingStepID = step.id
+        }
+        if kind == .keyShortcut {
+            ShortcutCapturePicker.pickShortcut { [weak self] shortcut in
+                DispatchQueue.main.async {
+                    guard let self, let i = self.steps.firstIndex(where: { $0.id == step.id }) else { return }
+                    self.steps[i].value = shortcut
+                }
+            }
+        }
+        if kind == .click {
+            ScreenCoordinatePicker.pickPoint { [weak self] point in
+                DispatchQueue.main.async {
+                    guard let self, let i = self.steps.firstIndex(where: { $0.id == step.id }) else { return }
+                    self.steps[i].setClickPoint(point)
+                }
+            }
+        }
     }
 
     func remove(_ id: UUID) {
-        let wasSelected = selectedStepID == id
         steps.removeAll { $0.id == id }
-        if wasSelected {
-            selectedStepID = steps.last?.id
-        }
     }
 
     func moveUp(_ id: UUID) {
@@ -40,14 +56,29 @@ final class MacroDraft {
         steps.swapAt(index, index + 1)
     }
 
-    func moveSelectedUp() {
-        guard let id = selectedStepID else { return }
-        moveUp(id)
+    func move(_ id: UUID, before targetID: UUID) {
+        guard id != targetID,
+              let from = steps.firstIndex(where: { $0.id == id }),
+              let to = steps.firstIndex(where: { $0.id == targetID }) else { return }
+        let step = steps.remove(at: from)
+        steps.insert(step, at: to)
     }
 
-    func moveSelectedDown() {
-        guard let id = selectedStepID else { return }
-        moveDown(id)
+    func duplicate(_ id: UUID) {
+        guard let index = steps.firstIndex(where: { $0.id == id }) else { return }
+        var copy = steps[index]
+        copy = MacroStep(kind: copy.kind)
+        copy.value = steps[index].value
+        copy.delay = steps[index].delay
+        copy.clickX = steps[index].clickX
+        copy.clickY = steps[index].clickY
+        copy.dragStartX = steps[index].dragStartX
+        copy.dragStartY = steps[index].dragStartY
+        copy.dragEndX = steps[index].dragEndX
+        copy.dragEndY = steps[index].dragEndY
+        copy.scrollDirection = steps[index].scrollDirection
+        copy.scrollAmount = steps[index].scrollAmount
+        steps.insert(copy, at: index + 1)
     }
 
     func loadFrom(_ macro: Macro) {
@@ -55,7 +86,8 @@ final class MacroDraft {
         details = macro.details
         iconName = macro.iconName
         steps = macro.steps
-        selectedStepID = nil
+        intervalBetweenSteps = macro.intervalBetweenSteps
+        repeatCount = macro.repeatCount
     }
 
     func makeMacro() -> Macro {
@@ -63,7 +95,9 @@ final class MacroDraft {
             name: trimmedName,
             details: details.trimmingCharacters(in: .whitespacesAndNewlines),
             iconName: iconName,
-            steps: steps
+            steps: steps,
+            intervalBetweenSteps: intervalBetweenSteps,
+            repeatCount: repeatCount
         )
     }
 
@@ -73,7 +107,9 @@ final class MacroDraft {
             name: trimmedName,
             details: details.trimmingCharacters(in: .whitespacesAndNewlines),
             iconName: iconName,
-            steps: steps
+            steps: steps,
+            intervalBetweenSteps: intervalBetweenSteps,
+            repeatCount: repeatCount
         )
         macro.createdAt = createdAt
         macro.lastUsedAt = lastUsedAt

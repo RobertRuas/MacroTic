@@ -9,37 +9,63 @@ struct MacroRowView: View {
     let onDelete: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
             Image(systemName: macro.iconName)
-                .font(.title2)
-                .foregroundStyle(.blue)
-                .frame(width: 32)
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(.white)
+                .frame(width: 36, height: 36)
+                .background(
+                    LinearGradient(
+                        colors: [.blue, .blue.opacity(0.7)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    in: RoundedRectangle(cornerRadius: 9)
+                )
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(macro.name)
-                    .fontWeight(.medium)
-                if !macro.details.isEmpty {
-                    Text(macro.details)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                    .font(.system(.body, weight: .semibold))
+                    .lineLimit(1)
+
+                HStack(spacing: 8) {
+                    if !macro.details.isEmpty {
+                        Text(macro.details)
+                            .lineLimit(1)
+                    }
+
+                    Text("\(macro.steps.count) ações")
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 3))
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 8)
+
+            if macro.executionCount > 0 {
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("\(macro.executionCount)×")
+                        .font(.system(.caption, design: .monospaced, weight: .medium))
+                        .foregroundStyle(.tertiary)
+                    Text(macro.lastUsedLabel)
+                        .font(.caption2)
+                        .foregroundStyle(.quaternary)
                 }
             }
 
-            Spacer()
-
-            HStack(spacing: 6) {
+            HStack(spacing: 2) {
                 if isRunning {
-                    Button {
-                        onStop()
-                    } label: {
+                    Button(action: onStop) {
                         Image(systemName: "stop.fill")
-                            .font(.caption)
+                            .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(.red)
-                            .frame(width: 26, height: 26)
-                            .background(.red.opacity(0.1), in: Circle())
+                            .frame(width: 28, height: 28)
+                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(IconActionButtonStyle(tint: .red))
                     .help("Parar execução")
                     .transition(.scale.combined(with: .opacity))
 
@@ -47,68 +73,47 @@ struct MacroRowView: View {
                         .controlSize(.small)
                         .transition(.opacity)
                 } else {
-                    Button {
-                        onPlay()
-                    } label: {
+                    Button(action: onPlay) {
                         Image(systemName: "play.fill")
-                            .font(.caption)
+                            .font(.system(size: 11))
                             .foregroundStyle(.green)
-                            .frame(width: 26, height: 26)
-                            .background(.green.opacity(0.1), in: Circle())
+                            .frame(width: 28, height: 28)
+                            .background(.green.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
+                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(IconActionButtonStyle(tint: .green))
                     .help("Executar macro")
                     .transition(.scale.combined(with: .opacity))
 
-                    Button {
-                        onEdit()
-                    } label: {
+                    Button(action: onEdit) {
                         Image(systemName: "pencil")
-                            .font(.caption)
+                            .font(.system(size: 11))
                             .foregroundStyle(.orange)
-                            .frame(width: 26, height: 26)
-                            .background(.orange.opacity(0.1), in: Circle())
+                            .frame(width: 28, height: 28)
+                            .background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
+                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(IconActionButtonStyle(tint: .orange))
                     .help("Editar macro")
                     .transition(.scale.combined(with: .opacity))
 
-                    Button {
-                        onDelete()
-                    } label: {
+                    Button(action: onDelete) {
                         Image(systemName: "trash")
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                            .frame(width: 26, height: 26)
-                            .background(.red.opacity(0.1), in: Circle())
+                            .font(.system(size: 11))
+                            .foregroundStyle(.red.opacity(0.7))
+                            .frame(width: 28, height: 28)
+                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(IconActionButtonStyle(tint: .red))
                     .help("Apagar macro")
                     .transition(.scale.combined(with: .opacity))
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: isRunning)
-
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(macro.createdAtLabel)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                if macro.executionCount > 0 {
-                    Text("\(macro.executionCount)x · \(macro.lastUsedLabel)")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-
-            Text("\(macro.steps.count) ações")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 4)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 10)
+        .background(.clear, in: RoundedRectangle(cornerRadius: 8))
         .contentShape(Rectangle())
         .contextMenu {
             Button {

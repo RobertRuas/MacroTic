@@ -14,6 +14,9 @@ final class AppState {
     let inspectorState = InspectorState()
 
     @ObservationIgnored
+    lazy var actionTester = ActionTester(executor: macroExecutor)
+
+    @ObservationIgnored
     let updater = UpdaterController()
 
     @ObservationIgnored

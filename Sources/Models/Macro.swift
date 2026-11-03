@@ -6,16 +6,28 @@ struct Macro: Identifiable, Hashable, Codable {
     var details: String
     var iconName: String
     var steps: [MacroStep]
+    var intervalBetweenSteps: Double
+    var repeatCount: Int
     var createdAt: Date
     var lastUsedAt: Date?
     var executionCount: Int
 
-    init(id: UUID = UUID(), name: String, details: String, iconName: String, steps: [MacroStep]) {
+    init(
+        id: UUID = UUID(),
+        name: String,
+        details: String,
+        iconName: String,
+        steps: [MacroStep],
+        intervalBetweenSteps: Double = 0.5,
+        repeatCount: Int = 1
+    ) {
         self.id = id
         self.name = name
         self.details = details
         self.iconName = iconName
         self.steps = steps
+        self.intervalBetweenSteps = intervalBetweenSteps
+        self.repeatCount = max(1, repeatCount)
         self.createdAt = Date()
         self.lastUsedAt = nil
         self.executionCount = 0
@@ -42,5 +54,31 @@ struct Macro: Identifiable, Hashable, Codable {
         let days = Int(interval / 86400)
         if days == 1 { return "Ontem" }
         return "Há \(days) dias"
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, details, iconName, steps, intervalBetweenSteps, repeatCount, createdAt, lastUsedAt, executionCount
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        details = try container.decode(String.self, forKey: .details)
+        iconName = try container.decode(String.self, forKey: .iconName)
+        steps = try container.decode([LossyStep].self, forKey: .steps).compactMap(\.step)
+        intervalBetweenSteps = try container.decodeIfPresent(Double.self, forKey: .intervalBetweenSteps) ?? 0.5
+        repeatCount = max(1, try container.decodeIfPresent(Int.self, forKey: .repeatCount) ?? 1)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        lastUsedAt = try container.decodeIfPresent(Date.self, forKey: .lastUsedAt)
+        executionCount = try container.decode(Int.self, forKey: .executionCount)
+    }
+}
+
+private struct LossyStep: Decodable {
+    let step: MacroStep?
+
+    init(from decoder: Decoder) throws {
+        step = try? MacroStep(from: decoder)
     }
 }

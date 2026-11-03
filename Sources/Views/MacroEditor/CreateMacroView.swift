@@ -2,6 +2,10 @@ import SwiftUI
 
 struct CreateMacroView: View {
     let draft: MacroDraft
+    let tester: ActionTester
+    let executor: MacroExecutor
+    let onRun: (Macro) -> Void
+    let onStopRun: () -> Void
     var isEditing: Bool = false
     var existingNames: [String] = []
     var editingMacroID: UUID? = nil
@@ -21,85 +25,178 @@ struct CreateMacroView: View {
             header
             Divider()
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 12) {
                     identitySection
+                    executionSection
                     stepsSection
                 }
-                .padding(20)
+                .padding(16)
             }
             Divider()
             footer
         }
-        .frame(width: 580, height: 520)
-        .background(keyboardShortcutHandlers)
+        .frame(width: 780, height: 600)
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(isEditing ? "Editar Macro" : "Nova Macro")
+        HStack(spacing: 10) {
+            Image(systemName: isEditing ? "pencil.circle.fill" : "plus.circle.fill")
                 .font(.title2)
-                .fontWeight(.semibold)
-            Text(isEditing ? "Altere o nome ou a sequência de ações." : "Dê um nome e monte a sequência de ações.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.tint)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(isEditing ? "Editar Macro" : "Nova Macro")
+                    .font(.headline)
+                Text(isEditing ? "Altere o nome ou a sequência de ações." : "Dê um nome e monte a sequência de ações.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
     private var identitySection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionTitle("Identificação")
-            VStack(spacing: 0) {
-                HStack {
-                    TextField(
-                        "Nome da macro",
-                        text: Binding(get: { draft.name }, set: { draft.name = $0 })
-                    )
-                    .textFieldStyle(.plain)
-                    .padding(.vertical, 10)
-
-                    if isDuplicateName {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
-                            .font(.caption)
-                            .help("Já existe uma macro com esse nome")
-                    }
-                }
-
-                if isDuplicateName {
-                    HStack(spacing: 4) {
-                        Image(systemName: "exclamationmark.circle")
-                            .font(.caption2)
-                        Text("Já existe uma macro com esse nome.")
-                            .font(.caption2)
-                    }
-                    .foregroundStyle(.orange)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.bottom, 6)
-                }
-
-                Divider()
-
+        VStack(spacing: 0) {
+            HStack {
                 TextField(
-                    "Descrição (opcional)",
-                    text: Binding(get: { draft.details }, set: { draft.details = $0 })
+                    "Nome da macro",
+                    text: Binding(get: { draft.name }, set: { draft.name = $0 })
                 )
                 .textFieldStyle(.plain)
-                .padding(.vertical, 10)
+                .padding(.vertical, 9)
+
+                if isDuplicateName {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .font(.caption)
+                        .help("Já existe uma macro com esse nome")
+                }
             }
-            .padding(.horizontal, 14)
+
+            if isDuplicateName {
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.circle")
+                        .font(.caption2)
+                    Text("Já existe uma macro com esse nome.")
+                        .font(.caption2)
+                }
+                .foregroundStyle(.orange)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.bottom, 6)
+            }
+
+            Divider()
+
+            TextField(
+                "Descrição (opcional)",
+                text: Binding(get: { draft.details }, set: { draft.details = $0 })
+            )
+            .textFieldStyle(.plain)
+            .padding(.vertical, 9)
+        }
+        .padding(.horizontal, 14)
+        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private var executionSection: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .top, spacing: 0) {
+                intervalColumn
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Divider()
+                    .frame(height: 56)
+                    .padding(.horizontal, 14)
+                repeatColumn
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(14)
             .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
+
+            Text("Espera entre cada ação e quantas vezes a sequência repete. ⌘Esc interrompe.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    private var intervalColumn: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label {
+                Text("Intervalo").font(.callout)
+            } icon: {
+                Image(systemName: "timer").foregroundStyle(.orange)
+            }
+
+            HStack(spacing: 6) {
+                TextField(
+                    "0",
+                    value: Binding(
+                        get: { Int((draft.intervalBetweenSteps * 1000).rounded()) },
+                        set: { draft.intervalBetweenSteps = Double(min(max($0, 0), 600_000)) / 1000 }
+                    ),
+                    format: .number.grouping(.never)
+                )
+                .textFieldStyle(.roundedBorder)
+                .multilineTextAlignment(.trailing)
+                .monospacedDigit()
+                .frame(width: 64)
+
+                Text("ms")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                ForEach([100, 500, 1000, 2000], id: \.self) { ms in
+                    Button("\(ms)") { draft.intervalBetweenSteps = Double(ms) / 1000 }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                }
+            }
+        }
+    }
+
+    private var repeatColumn: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label {
+                Text("Repetições").font(.callout)
+            } icon: {
+                Image(systemName: "repeat").foregroundStyle(.blue)
+            }
+
+            HStack(spacing: 6) {
+                TextField(
+                    "1",
+                    value: Binding(
+                        get: { draft.repeatCount },
+                        set: { draft.repeatCount = min(max($0, 1), 9999) }
+                    ),
+                    format: .number.grouping(.never)
+                )
+                .textFieldStyle(.roundedBorder)
+                .multilineTextAlignment(.trailing)
+                .monospacedDigit()
+                .frame(width: 56)
+
+                Stepper("", value: Binding(
+                    get: { draft.repeatCount },
+                    set: { draft.repeatCount = min(max($0, 1), 9999) }
+                ), in: 1...9999)
+                .labelsHidden()
+
+                ForEach([1, 3, 5, 10, 50], id: \.self) { n in
+                    Button("\(n)×") { draft.repeatCount = n }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                        .tint(draft.repeatCount == n ? .accentColor : nil)
+                }
+            }
         }
     }
 
     private var stepsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack {
                 sectionTitle("Ações")
                 Spacer()
-                shortcutsHint
                 addMenu
             }
 
@@ -112,7 +209,16 @@ struct CreateMacroView: View {
                             step: stepBinding(pair.element),
                             position: pair.offset,
                             total: draft.steps.count,
-                            isSelected: draft.selectedStepID == pair.element.id,
+                            isSelected: tester.runningStepID == pair.element.id,
+                            isTesting: tester.runningStepID == pair.element.id,
+                            testDisabled: tester.isBusy,
+                            onTest: { tester.test(pair.element) },
+                            onReorder: { draggedID in
+                                draft.dropTargetID = nil
+                                withAnimation(.spring(duration: 0.35, bounce: 0.2)) {
+                                    draft.move(draggedID, before: pair.element.id)
+                                }
+                            },
                             onMoveUp: {
                                 withAnimation(.easeInOut(duration: 0.25)) {
                                     draft.moveUp(pair.element.id)
@@ -123,12 +229,21 @@ struct CreateMacroView: View {
                                     draft.moveDown(pair.element.id)
                                 }
                             },
+                            onDuplicate: {
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    draft.duplicate(pair.element.id)
+                                }
+                            },
                             onRemove: {
                                 withAnimation(.easeInOut(duration: 0.2)) {
                                     draft.remove(pair.element.id)
                                 }
                             },
-                            onSelect: { draft.selectedStepID = pair.element.id }
+                            isDropTarget: draft.dropTargetID == pair.element.id,
+                            onDropTargetChange: { targeted in
+                                if targeted { draft.dropTargetID = pair.element.id }
+                                else if draft.dropTargetID == pair.element.id { draft.dropTargetID = nil }
+                            }
                         )
                         .transition(.asymmetric(
                             insertion: .move(edge: .trailing).combined(with: .opacity),
@@ -163,19 +278,6 @@ struct CreateMacroView: View {
         .fixedSize()
     }
 
-    private var shortcutsHint: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "command")
-            Image(systemName: "arrow.up.arrow.down")
-        }
-        .font(.system(size: 9))
-        .foregroundStyle(.tertiary)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
-        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 4))
-        .help("⌘↑ Mover acima · ⌘↓ Mover abaixo")
-    }
-
     private var emptyState: some View {
         VStack(spacing: 6) {
             Image(systemName: "wand.and.stars")
@@ -198,6 +300,22 @@ struct CreateMacroView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
+            if executor.isRunning {
+                Button {
+                    onStopRun()
+                } label: {
+                    Label("Parar (⌘Esc)", systemImage: "stop.fill")
+                }
+                .tint(.red)
+            } else {
+                Button {
+                    onRun(draft.makeMacro())
+                } label: {
+                    Label("Executar macro", systemImage: "play.fill")
+                }
+                .tint(.green)
+                .disabled(draft.steps.isEmpty || tester.isBusy)
+            }
             Button("Cancelar", action: onCancel)
                 .keyboardShortcut(.cancelAction)
             Button(isEditing ? "Salvar Alterações" : "Salvar") {
@@ -207,28 +325,8 @@ struct CreateMacroView: View {
             .buttonStyle(.borderedProminent)
             .disabled(!draft.isValid || isDuplicateName)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-    }
-
-    private var keyboardShortcutHandlers: some View {
-        Group {
-            Button("") {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    draft.moveSelectedUp()
-                }
-            }
-            .keyboardShortcut(.upArrow, modifiers: .command)
-            .hidden()
-
-            Button("") {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    draft.moveSelectedDown()
-                }
-            }
-            .keyboardShortcut(.downArrow, modifiers: .command)
-            .hidden()
-        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
     private var stepCountLabel: String {

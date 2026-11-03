@@ -6,7 +6,6 @@ enum MacroStepKind: String, CaseIterable, Identifiable, Codable {
     case click
     case delay
     case launchApp
-    case openURL
     case dragAndDrop
     case scroll
 
@@ -18,8 +17,7 @@ enum MacroStepKind: String, CaseIterable, Identifiable, Codable {
         case .typeText: "Digitar texto"
         case .click: "Clique"
         case .delay: "Esperar"
-        case .launchApp: "Abrir app"
-        case .openURL: "Abrir URL"
+        case .launchApp: "Selecionar janela"
         case .dragAndDrop: "Clicar, arrastar e soltar"
         case .scroll: "Scroll"
         }
@@ -31,8 +29,7 @@ enum MacroStepKind: String, CaseIterable, Identifiable, Codable {
         case .typeText: "text.cursor"
         case .click: "cursorarrow.click"
         case .delay: "clock"
-        case .launchApp: "app.badge"
-        case .openURL: "link"
+        case .launchApp: "macwindow"
         case .dragAndDrop: "arrow.up.and.down.and.arrow.left.and.right"
         case .scroll: "scroll"
         }
@@ -45,7 +42,6 @@ enum MacroStepKind: String, CaseIterable, Identifiable, Codable {
         case .click: .green
         case .delay: .orange
         case .launchApp: .pink
-        case .openURL: .teal
         case .dragAndDrop: .indigo
         case .scroll: .cyan
         }
@@ -58,7 +54,6 @@ enum MacroStepKind: String, CaseIterable, Identifiable, Codable {
         case .click: "Clique para capturar posição"
         case .delay: ""
         case .launchApp: "Selecionar janela"
-        case .openURL: "https://"
         case .dragAndDrop: "Clique e arraste na tela"
         case .scroll: ""
         }
@@ -76,5 +71,5 @@ enum MacroStepKind: String, CaseIterable, Identifiable, Codable {
 
     var usesWindowPicker: Bool { self == .launchApp }
 
-    var usesTextField: Bool { self == .typeText || self == .openURL }
+    var usesTextField: Bool { self == .typeText }
 }

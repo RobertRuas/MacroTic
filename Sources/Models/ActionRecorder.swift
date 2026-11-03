@@ -10,16 +10,24 @@ final class ActionRecorder {
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var lastEventTime: Date?
+    private var recordingStartTime: Date?
     private var timer: Timer?
 
     private static var sharedRecorder: ActionRecorder?
+
+    private let specialKeys: Set<CGKeyCode> = [
+        36, 48, 49, 51, 53, 76, 96, 97, 98, 99, 100, 101,
+        115, 116, 117, 119, 121, 123, 124, 125, 126
+    ]
 
     func startRecording() {
         guard !isRecording else { return }
         recordedSteps = []
         elapsedTime = 0
         isRecording = true
-        lastEventTime = Date()
+        let now = Date()
+        lastEventTime = now
+        recordingStartTime = now
         ActionRecorder.sharedRecorder = self
 
         let eventMask: CGEventMask =
@@ -51,9 +59,8 @@ final class ActionRecorder {
         CGEvent.tapEnable(tap: tap, enable: true)
 
         timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            guard let self = self else { return }
-            self.elapsedTime = Date().timeIntervalSince(self.lastEventTime ?? Date()) + self.elapsedTime
-            self.lastEventTime = Date()
+            guard let self = self, let start = self.recordingStartTime else { return }
+            self.elapsedTime = Date().timeIntervalSince(start)
         }
     }
 
@@ -109,9 +116,9 @@ final class ActionRecorder {
             recordedSteps.append(step)
 
         case .keyDown:
-            let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+            let keyCode = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
             let flags = event.flags
-            let keyString = keyNameForCode(CGKeyCode(keyCode))
+            let keyString = keyNameForCode(keyCode)
 
             var modifiers: [String] = []
             if flags.contains(.maskCommand) { modifiers.append("⌘") }
@@ -119,12 +126,14 @@ final class ActionRecorder {
             if flags.contains(.maskShift) { modifiers.append("⇧") }
             if flags.contains(.maskControl) { modifiers.append("⌃") }
 
-            if !modifiers.isEmpty {
+            let isSpecial = specialKeys.contains(keyCode)
+
+            if !modifiers.isEmpty || isSpecial {
                 var step = MacroStep(kind: .keyShortcut)
                 step.value = (modifiers + [keyString]).joined(separator: "+")
                 recordedSteps.append(step)
             } else {
-                let chars = characterForKeyCode(CGKeyCode(keyCode))
+                let chars = characterForKeyCode(keyCode)
                 if !chars.isEmpty {
                     if let lastIndex = recordedSteps.indices.last,
                        recordedSteps[lastIndex].kind == .typeText {
@@ -140,16 +149,33 @@ final class ActionRecorder {
         case .scrollWheel:
             let deltaY = event.getIntegerValueField(.scrollWheelEventDeltaAxis1)
             let deltaX = event.getIntegerValueField(.scrollWheelEventDeltaAxis2)
-            var step = MacroStep(kind: .scroll)
+
+            let direction: ScrollDirection
+            let amount: Double
 
             if abs(deltaY) >= abs(deltaX) {
-                step.scrollDirection = deltaY > 0 ? .up : .down
-                step.scrollAmount = Double(abs(deltaY))
+                direction = deltaY > 0 ? .up : .down
+                amount = Double(abs(deltaY))
             } else {
-                step.scrollDirection = deltaX > 0 ? .left : .right
-                step.scrollAmount = Double(abs(deltaX))
+                direction = deltaX > 0 ? .left : .right
+                amount = Double(abs(deltaX))
             }
-            if step.scrollAmount > 0 {
+
+            guard amount > 0 else { break }
+
+            if let lastIndex = recordedSteps.indices.last,
+               recordedSteps[lastIndex].kind == .scroll,
+               recordedSteps[lastIndex].scrollDirection == direction {
+                recordedSteps[lastIndex].scrollAmount = min(recordedSteps[lastIndex].scrollAmount + amount, 50)
+                recordedSteps[lastIndex].value = "\(direction.title) ×\(Int(recordedSteps[lastIndex].scrollAmount))"
+            } else {
+                var step = MacroStep(kind: .scroll)
+                step.scrollDirection = direction
+                step.scrollAmount = min(amount, 50)
+                step.scrollMovesMouse = true
+                step.scrollX = event.location.x
+                step.scrollY = event.location.y
+                step.value = "\(direction.title) ×\(Int(step.scrollAmount))"
                 recordedSteps.append(step)
             }
 
@@ -167,7 +193,10 @@ final class ActionRecorder {
             30: "]", 31: "O", 32: "U", 33: "[", 34: "I", 35: "P", 36: "Return",
             37: "L", 38: "J", 39: "'", 40: "K", 41: ";", 42: "\\", 43: ",",
             44: "/", 45: "N", 46: "M", 47: ".", 48: "Tab", 49: "Space",
-            50: "`", 51: "Delete", 53: "Escape",
+            50: "`", 51: "Delete", 53: "Escape", 76: "Enter",
+            96: "F5", 97: "F6", 98: "F7", 99: "F3", 100: "F8", 101: "F9",
+            115: "Home", 116: "PageUp", 117: "ForwardDelete", 119: "End",
+            121: "PageDown",
             123: "Left", 124: "Right", 125: "Down", 126: "Up",
         ]
         return map[keyCode] ?? "Key\(keyCode)"

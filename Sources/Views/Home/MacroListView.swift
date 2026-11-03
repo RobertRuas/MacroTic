@@ -14,16 +14,18 @@ struct MacroListView: View {
                 emptyState
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))
             } else {
-                if !store.recentlyUsed.isEmpty {
+                let showRecent = !store.recentlyUsed.isEmpty && store.recentlyUsed.count < store.macros.count
+                if showRecent {
                     recentSection
                     Divider()
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 4)
                 }
                 allSection
             }
         }
         .background(.background.secondary)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
         .animation(.easeInOut(duration: 0.3), value: store.macros.count)
     }
 
@@ -45,7 +47,7 @@ struct MacroListView: View {
 
     private var recentSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            sectionHeader("Usados Recentemente")
+            sectionHeader("Usados Recentemente", icon: "clock.arrow.circlepath")
             ForEach(store.recentlyUsed) { macro in
                 macroRow(macro)
                     .transition(.asymmetric(
@@ -54,12 +56,12 @@ struct MacroListView: View {
                     ))
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 8)
     }
 
     private var allSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            sectionHeader("Todas as Macros")
+            sectionHeader("Todas as Macros", icon: "list.bullet")
             ForEach(store.macros) { macro in
                 macroRow(macro)
                     .transition(.asymmetric(
@@ -68,7 +70,7 @@ struct MacroListView: View {
                     ))
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 8)
     }
 
     private func macroRow(_ macro: Macro) -> some View {
@@ -82,12 +84,17 @@ struct MacroListView: View {
         )
     }
 
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .font(.caption)
-            .fontWeight(.medium)
-            .foregroundStyle(.secondary)
-            .padding(.top, 10)
-            .padding(.bottom, 4)
+    private func sectionHeader(_ title: String, icon: String) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.system(size: 10, weight: .medium))
+            Text(title)
+                .font(.caption)
+                .fontWeight(.medium)
+        }
+        .foregroundStyle(.secondary)
+        .padding(.top, 12)
+        .padding(.bottom, 4)
+        .padding(.leading, 10)
     }
 }

@@ -19,6 +19,7 @@ struct MainWindowView: View {
         } detail: {
             switch state.selectedSection {
             case .settings: SettingsView(state: state)
+            case .home: HomeView()
             default: Color.clear
             }
         }

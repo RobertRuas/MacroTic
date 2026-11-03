@@ -77,14 +77,20 @@ Sources/
 │   ├── MacroTicApp.swift          ENTRY POINT. @main enum MacroTicApp; AppDelegate creates MainWindowController
 │   │                              and quits when the last window closes.
 │   ├── MainWindowController.swift Creates the classic NSWindow (titled, closable, miniaturizable, resizable,
-│   │                              900x600, min 600x400, centered) hosting MainWindowView. Owns AppState.
+│   │                              720x480, min 560x380, centered, zoom/maximize disabled) hosting MainWindowView. Owns AppState.
 │   └── UpdaterController.swift    SPARKLE WRAPPER. @Observable class around SPUStandardUpdaterController; starts on init.
 │                                  Behavior comes from Contents/Info.plist (see Packaging/Info.plist). No-op outside a packaged .app.
 ├── Models/
 │   ├── AppSection.swift           Sidebar entries (enum: id, title, icon). Add a case to add a sidebar row.
 │   └── AppState.swift             @Observable: selectedSection, updater.
 └── Views/
-    ├── MainWindowView.swift       NavigationSplitView: sidebar List of AppSection (bound to state.selectedSection); detail shows SettingsView for .settings, empty otherwise.
+    ├── MainWindowView.swift       NavigationSplitView: sidebar List of AppSection (bound to state.selectedSection); detail shows HomeView for .home, SettingsView for .settings, empty otherwise.
+    ├── Home/
+    │   ├── HomeView.swift             HOME SCREEN. Composes ActionsRow (top) + MacroListView (bottom).
+    │   ├── StatsCardView.swift        ActionCardView component: clickable card with icon, title, color. Used by ActionsRow.
+    │   ├── StatsCardsRow.swift        ActionsRow: horizontal row of ActionCardView cards (Nova Macro, Inspetor, Gravar Ações).
+    │   ├── MacroListView.swift        Single macro list with two sections separated: "Usados Recentemente" (top 3) and "Todas as Macros". Shows empty states when no macros exist.
+    │   └── MacroRowView.swift         Single macro row component: name, description, last used, execution count. Used by MacroListView when macros exist.
     └── Settings/
         └── SettingsView.swift     SETTINGS SCREEN. Single "Atualizações" card: current version (CFBundleShortVersionString) + "Verificar atualizações" button (state.updater.checkForUpdates()).
 ```

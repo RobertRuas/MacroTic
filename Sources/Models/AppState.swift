@@ -11,16 +11,9 @@ final class AppState {
     let macroStore = MacroStore()
     let macroExecutor = MacroExecutor()
     let actionRecorder = ActionRecorder()
-    let inspectorState = InspectorState()
-
-    @ObservationIgnored
-    lazy var actionTester = ActionTester(executor: macroExecutor)
 
     @ObservationIgnored
     let updater = UpdaterController()
-
-    @ObservationIgnored
-    lazy var inspectorPanel = InspectorPanelController(inspectorState: inspectorState)
 
     var isEditing: Bool { editingMacroID != nil }
 
@@ -69,10 +62,6 @@ final class AppState {
         macroExecutor.stop()
     }
 
-    func toggleInspector() {
-        inspectorPanel.toggle()
-    }
-
     func startRecording() {
         actionRecorder.startRecording()
     }
@@ -82,5 +71,16 @@ final class AppState {
         editingMacroID = nil
         macroDraft = actionRecorder.makeDraft()
         isCreatingMacro = true
+    }
+
+    func toggleEditorRecording() {
+        if actionRecorder.isRecording {
+            actionRecorder.stopRecording()
+            withAnimation(.easeInOut(duration: 0.22)) {
+                macroDraft.steps.append(contentsOf: actionRecorder.recordedSteps)
+            }
+        } else {
+            actionRecorder.startRecording()
+        }
     }
 }

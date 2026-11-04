@@ -4,10 +4,6 @@ struct MacroStepRowView: View {
     let step: Binding<MacroStep>
     let position: Int
     let total: Int
-    let isSelected: Bool
-    var isTesting: Bool = false
-    var testDisabled: Bool = false
-    let onTest: () -> Void
     let onReorder: (UUID) -> Void
     let onMoveUp: () -> Void
     let onMoveDown: () -> Void
@@ -38,11 +34,6 @@ struct MacroStepRowView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(
-            isSelected
-                ? AnyShapeStyle(Color.accentColor.opacity(0.10))
-                : AnyShapeStyle(.clear)
-        )
         .overlay(alignment: .top) {
             Capsule()
                 .fill(Color.accentColor)
@@ -100,22 +91,6 @@ struct MacroStepRowView: View {
 
     private var trailingControls: some View {
         HStack(spacing: 2) {
-            if isTesting {
-                ProgressView()
-                    .controlSize(.small)
-                    .frame(width: 24, height: 24)
-            } else {
-                Button(action: onTest) {
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 11, weight: .semibold))
-                        .frame(width: 24, height: 24)
-                }
-                .buttonStyle(IconActionButtonStyle(tint: .green))
-                .foregroundStyle(.green)
-                .disabled(testDisabled)
-                .help("Testar esta ação")
-            }
-
             Menu {
                 Button {
                     onMoveUp()

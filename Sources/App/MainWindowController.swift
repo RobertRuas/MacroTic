@@ -86,10 +86,11 @@ private struct EditorRoot: View {
     var body: some View {
         CreateMacroView(
             draft: state.macroDraft,
-            tester: state.actionTester,
             executor: state.macroExecutor,
+            recorder: state.actionRecorder,
             onRun: { macro in state.macroExecutor.execute(macro) },
             onStopRun: { state.stopMacro() },
+            onToggleRecord: { state.toggleEditorRecording() },
             isEditing: state.isEditing,
             existingNames: state.macroStore.macros
                 .filter { $0.id != state.editingMacroID }

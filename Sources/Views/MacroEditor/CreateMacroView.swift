@@ -2,10 +2,11 @@ import SwiftUI
 
 struct CreateMacroView: View {
     let draft: MacroDraft
-    let tester: ActionTester
     let executor: MacroExecutor
+    let recorder: ActionRecorder
     let onRun: (Macro) -> Void
     let onStopRun: () -> Void
+    let onToggleRecord: () -> Void
     var isEditing: Bool = false
     var existingNames: [String] = []
     var editingMacroID: UUID? = nil
@@ -167,6 +168,7 @@ struct CreateMacroView: View {
                     .background(.quaternary, in: Capsule())
                     .foregroundStyle(.secondary)
                 Spacer()
+                recordButton
                 addMenu
             }
             .padding(.horizontal, 16)
@@ -191,10 +193,6 @@ struct CreateMacroView: View {
                         step: stepBinding(pair.element),
                         position: pair.offset,
                         total: draft.steps.count,
-                        isSelected: tester.runningStepID == pair.element.id,
-                        isTesting: tester.runningStepID == pair.element.id,
-                        testDisabled: tester.isBusy,
-                        onTest: { tester.test(pair.element) },
                         onReorder: { draggedID in
                             draft.dropTargetID = nil
                             withAnimation(.spring(duration: 0.35, bounce: 0.2)) {
@@ -241,6 +239,21 @@ struct CreateMacroView: View {
             }
             .padding(.vertical, 2)
         }
+    }
+
+    private var recordButton: some View {
+        Button(action: onToggleRecord) {
+            Label(
+                recorder.isRecording ? "Parar gravação" : "Gravar ação",
+                systemImage: recorder.isRecording ? "stop.circle.fill" : "record.circle"
+            )
+            .font(.caption.weight(.medium))
+            .foregroundStyle(recorder.isRecording ? .red : .primary)
+        }
+        .buttonStyle(.borderless)
+        .help(recorder.isRecording
+              ? "Para gravar e anexa as ações capturadas ao fim da lista"
+              : "Grava um trecho e anexa ao fim da lista de ações")
     }
 
     private var addMenu: some View {
@@ -294,7 +307,7 @@ struct CreateMacroView: View {
                     Label("Executar", systemImage: "play.fill")
                 }
                 .tint(.green)
-                .disabled(draft.steps.isEmpty || tester.isBusy)
+                .disabled(draft.steps.isEmpty)
             }
 
             Spacer()

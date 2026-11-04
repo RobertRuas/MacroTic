@@ -7,7 +7,6 @@ struct HomeView: View {
         VStack(spacing: 14) {
             ActionsRow(
                 onNewMacro: { state.beginCreatingMacro() },
-                onInspector: { state.toggleInspector() },
                 onRecord: {
                     if state.actionRecorder.isRecording {
                         state.stopRecording()
@@ -15,8 +14,7 @@ struct HomeView: View {
                         state.startRecording()
                     }
                 },
-                isRecording: state.actionRecorder.isRecording,
-                isInspectorActive: state.inspectorState.isActive
+                isRecording: state.actionRecorder.isRecording
             )
 
             if state.macroExecutor.isRunning {

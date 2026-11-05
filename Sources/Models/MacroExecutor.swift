@@ -141,6 +141,10 @@ final class MacroExecutor {
                         try? await Task.sleep(for: .milliseconds(Int(interval * 1000)))
                     }
                 }
+
+                if !self.shouldStop && !Task.isCancelled && repetition < repetitions {
+                    await MainActor.run { self.activateApp() }
+                }
             }
 
             await MainActor.run {

@@ -26,6 +26,7 @@ rm -rf "$BUILD_DIR" "$DIST_DIR"
 mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources" "$APP_BUNDLE/Contents/Frameworks" "$DIST_DIR"
 
 cp ".build/release/$APP_NAME" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
+cp "Packaging/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 
 SPARKLE_FRAMEWORK="$(find .build/release -maxdepth 1 -name "Sparkle.framework" | head -n1)"
 if [ -z "$SPARKLE_FRAMEWORK" ]; then

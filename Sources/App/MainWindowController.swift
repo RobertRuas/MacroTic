@@ -8,6 +8,11 @@ final class MainWindowController: NSObject, NSWindowDelegate, NSToolbarDelegate 
 
     private static let settingsItemID = NSToolbarItem.Identifier("settings")
 
+    private static var titleWithVersion: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
+        return "MacroTic — v\(version)"
+    }
+
     override init() {
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 750, height: 510),
@@ -16,7 +21,7 @@ final class MainWindowController: NSObject, NSWindowDelegate, NSToolbarDelegate 
             defer: false
         )
         super.init()
-        window.title = "MacroTic"
+        window.title = Self.titleWithVersion
         window.contentMinSize = NSSize(width: 750, height: 510)
         window.contentView = NSHostingView(rootView: MainWindowView(state: state))
         window.standardWindowButton(.zoomButton)?.isEnabled = false

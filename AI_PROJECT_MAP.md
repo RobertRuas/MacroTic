@@ -34,23 +34,32 @@ MacroTic/
                                 then deletes every other release so only the latest stays published.
                                 Needs repo secrets: SPARKLE_PRIVATE_KEY, SPARKLE_PUBLIC_KEY (see Scripts/generate_sparkle_keys.sh), and
                                 CODESIGN_P12_BASE64, CODESIGN_P12_PASSWORD, CODESIGN_IDENTITY for the stable self-signed code signing
-                                identity (imports the cert into a throwaway keychain, trusts it for codeSign, deletes the keychain
-                                at the end regardless of job outcome).
+                                identity (imports the cert into a throwaway keychain, deletes it at the end regardless of job outcome;
+                                does NOT call security add-trusted-cert — that modifies Trust Settings, which can require GUI
+                                authorization that hangs forever on a headless runner, and codesign --sign "<identity>" doesn't need it).
 
 Packaging/
-└── Info.plist                 Template Info.plist for the packaged app. Placeholders __VERSION__, __OWNER__, __REPO__,
-                                __SPARKLE_PUBLIC_KEY__ are substituted by Scripts/package_app.sh.
-                                SUFeedURL points to https://github.com/<owner>/<repo>/releases/latest/download/appcast.xml
-                                (GitHub's stable "latest" redirect — always resolves to the one release kept published).
-                                SUEnableAutomaticChecks + SUAutomaticallyUpdate are both true: updates download and
-                                install automatically without prompting.
+├── Info.plist                 Template Info.plist for the packaged app. Placeholders __VERSION__, __OWNER__, __REPO__,
+│                                __SPARKLE_PUBLIC_KEY__ are substituted by Scripts/package_app.sh. CFBundleIconFile/
+│                                CFBundleIconName point at AppIcon (AppIcon.icns, copied in by package_app.sh).
+│                                SUFeedURL points to https://github.com/<owner>/<repo>/releases/latest/download/appcast.xml
+│                                (GitHub's stable "latest" redirect — always resolves to the one release kept published).
+│                                SUEnableAutomaticChecks + SUAutomaticallyUpdate are both true: updates download and
+│                                install automatically without prompting.
+├── AppIcon.icns                App icon (blue/purple gradient rounded square, white ⌘ glyph), built via iconutil from
+│                                AppIcon-1024.png at the standard 16–512pt (@1x/@2x) sizes. Copied into
+│                                Contents/Resources/AppIcon.icns by package_app.sh.
+└── AppIcon-1024.png            1024×1024 master render of the icon artwork — regenerate the .iconset/.icns from this if
+                                 the design changes (rendered via AppKit: NSGradient rounded-rect + SF Symbol "command", not
+                                 checked into any build graph).
 
 Scripts/
 ├── package_app.sh              Builds build/MacroTic.app from .build/release, embeds Sparkle.framework into
-│                                Contents/Frameworks, fills in Packaging/Info.plist, codesigns (deep, including
-│                                Sparkle's nested XPC services/Autoupdate/Updater.app) using $CODESIGN_IDENTITY — the stable
-│                                self-signed "MacroTic Code Signing" identity in CI/release builds, falling back to ad-hoc
-│                                ("-") for local dev builds where it isn't set — then zips to dist/MacroTic-<version>.zip.
+│                                Contents/Frameworks, copies Packaging/AppIcon.icns into Contents/Resources, fills in
+│                                Packaging/Info.plist, codesigns (deep, including Sparkle's nested XPC services/Autoupdate/
+│                                Updater.app) using $CODESIGN_IDENTITY — the stable self-signed "MacroTic Code Signing"
+│                                identity in CI/release builds, falling back to ad-hoc ("-") for local dev builds where it
+│                                isn't set — then zips to dist/MacroTic-<version>.zip.
 ├── build_appcast.sh             Downloads the Sparkle CLI tools matching Package.resolved's pinned version, runs
 │                                generate_appcast against dist/ to sign the zip (EdDSA) and emit dist/appcast.xml.
 │                                Reads the private key from SPARKLE_PRIVATE_KEY (never written to disk outside a temp file).
@@ -88,7 +97,9 @@ Sources/
 │   │                              on launch so macOS registers the app under Accessibility and prompts the user if needed
 │   │                              (required for CGEvent posting in MacroExecutor to actually have any effect).
 │   ├── MainWindowController.swift Creates the classic NSWindow (titled, closable, miniaturizable, resizable,
-│   │                              750x510, min 750x510, centered, zoom/maximize disabled) hosting MainWindowView. Owns AppState.
+│   │                              750x510, min 750x510, centered, zoom/maximize disabled) hosting MainWindowView. Title is
+│   │                              "MacroTic — v<CFBundleShortVersionString>" (titleWithVersion) so the running build's
+│   │                              version is always visible. Owns AppState.
 │   │                              Attaches a native NSToolbar (unified style, NSToolbarDelegate on self) with a single
 │   │                              flexible-space + gearshape item that toggles state.selectedSection between .home/.settings
 │   │                              (no sidebar). Observes state.isCreatingMacro via withObservationTracking and swaps to a separate 680x540
@@ -105,7 +116,7 @@ Sources/
 │   ├── AppSection.swift           Section identifiers (enum: home, settings — id, title, icon), used by state.selectedSection.
 │   ├── AppState.swift             @Observable: selectedSection, updater, isCreatingMacro flag + macroDraft + editingMacroID, macroStore, macroExecutor, actionRecorder. Methods: beginCreatingMacro(), beginEditingMacro(), saveMacro() (handles create vs edit), deleteMacro() (animated), playMacro(), stopMacro(), startRecording(), stopRecording(), toggleEditorRecording() (in-editor record: starts recorder, on stop appends captured steps to the current draft).
 │   ├── Macro.swift                Domain model (struct, Codable): id, name, details, iconName, steps:[MacroStep], intervalBetweenSteps (default 0.5s), repeatCount (default 1, executor repeats the whole sequence), createdAt, lastUsedAt, executionCount. Provides createdAtLabel (dd/MM/yyyy HH:mm) and lastUsedLabel computed properties. Backwards-compatible Codable (decodeIfPresent for intervalBetweenSteps).
-│   ├── MacroExecutor.swift        @Observable orchestrator. Delegates each step to the matching MacroAction from Actions/. Before running, checks AXIsProcessTrusted() and, if not granted, sets state to .error with an instructional message, re-prompts via AXIsProcessTrustedWithOptions, and opens System Settings → Accessibility (CGEvent posting is silently a no-op without this permission). Runs on Task.detached (background), updates state on MainActor. Repeats the full captured step sequence macro.repeatCount times, waiting intervalBetweenSteps between every step (including across the rep boundary). Tracks state (idle/running/paused/finished/error). Restores the cursor to its original position when the macro ends/stops. On finish/error/stop calls activateApp() to bring MacroTic's window back to the front. stop() cancels currentTask; actions cooperatively check Task.isCancelled inside their own per-frame loops (not just between steps) so ⌘Esc (global + local key monitor, installed while running) actually interrupts mid-action instead of waiting for a long click/drag/scroll/type to finish. Methods: execute(), pause(), resume(), stop().
+│   ├── MacroExecutor.swift        @Observable orchestrator. Delegates each step to the matching MacroAction from Actions/. Before running, checks AXIsProcessTrusted() and, if not granted, sets state to .error with an instructional message, re-prompts via AXIsProcessTrustedWithOptions, and opens System Settings → Accessibility (CGEvent posting is silently a no-op without this permission). Runs on Task.detached (background), updates state on MainActor. Repeats the full captured step sequence macro.repeatCount times, waiting intervalBetweenSteps between every step (including across the rep boundary), and also calls activateApp() between repetitions (not just at the very end) so every new repetition starts from "estaca zero" — focus back on MacroTic — the same way the first one did. Tracks state (idle/running/paused/finished/error). Restores the cursor to its original position when the macro ends/stops. On finish/error/stop calls activateApp() to bring MacroTic's window back to the front. stop() cancels currentTask; actions cooperatively check Task.isCancelled inside their own per-frame loops (not just between steps) so ⌘Esc (global + local key monitor, installed while running) actually interrupts mid-action instead of waiting for a long click/drag/scroll/type to finish. Methods: execute(), pause(), resume(), stop().
 │   ├── Actions/
 │   │   ├── MacroAction.swift          Protocol: `execute(step:) -> Bool`. All action types conform to this.
 │   │   ├── KeyShortcutAction.swift    Parses step.value via ShortcutKeyMap, presses modifier keys (flagsChanged), posts key down/up, releases modifiers. Not cancellation-aware (sequence is short and must fully release modifiers to avoid stuck keys).

@@ -11,6 +11,9 @@ final class UpdaterController {
 
     private(set) var canCheckForUpdates = false
 
+    @ObservationIgnored
+    private var didInitialCheck = false
+
     let isAvailable = Bundle.main.bundleURL.pathExtension == "app"
 
     init() {
@@ -20,15 +23,19 @@ final class UpdaterController {
             userDriverDelegate: nil
         )
         canCheckForUpdates = standardController.updater.canCheckForUpdates
-        observation = standardController.updater.observe(\.canCheckForUpdates, options: [.new]) { [weak self] _, change in
+        observation = standardController.updater.observe(\.canCheckForUpdates, options: [.initial, .new]) { [weak self] updater, _ in
             DispatchQueue.main.async {
-                self?.canCheckForUpdates = change.newValue ?? false
+                guard let self = self else { return }
+                self.canCheckForUpdates = updater.canCheckForUpdates
+                self.performInitialCheckIfNeeded()
             }
         }
+    }
 
-        if isAvailable {
-            standardController.updater.checkForUpdatesInBackground()
-        }
+    private func performInitialCheckIfNeeded() {
+        guard isAvailable, !didInitialCheck, standardController.updater.canCheckForUpdates else { return }
+        didInitialCheck = true
+        standardController.updater.checkForUpdatesInBackground()
     }
 
     func checkForUpdates() {

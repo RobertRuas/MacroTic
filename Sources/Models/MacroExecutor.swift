@@ -19,31 +19,61 @@ final class MacroExecutor {
     private var shouldStop = false
     private var isPaused = false
     private var currentTask: Task<Void, Never>?
-    private var globalKeyMonitor: Any?
-    private var localKeyMonitor: Any?
+    private var stopEventTap: CFMachPort?
+    private var stopRunLoopSource: CFRunLoopSource?
+    private static weak var activeStopTarget: MacroExecutor?
 
     private func installStopShortcut() {
         removeStopShortcut()
-        let handler: (NSEvent) -> Bool = { event in
-            event.keyCode == 53 && event.modifierFlags.intersection(.deviceIndependentFlagsMask).contains(.command)
+        MacroExecutor.activeStopTarget = self
+
+        let mask: CGEventMask = (1 << CGEventType.keyDown.rawValue)
+        let tap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .defaultTap,
+            eventsOfInterest: mask,
+            callback: { _, type, event, _ -> Unmanaged<CGEvent>? in
+                if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+                    if let tap = MacroExecutor.activeStopTarget?.stopEventTap {
+                        CGEvent.tapEnable(tap: tap, enable: true)
+                    }
+                    return Unmanaged.passUnretained(event)
+                }
+                if type == .keyDown {
+                    let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+                    if keyCode == 53 && event.flags.contains(.maskCommand) {
+                        DispatchQueue.main.async { MacroExecutor.activeStopTarget?.stop() }
+                        return nil
+                    }
+                }
+                return Unmanaged.passUnretained(event)
+            },
+            userInfo: nil
+        )
+
+        guard let tap = tap else { return }
+        stopEventTap = tap
+        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+        stopRunLoopSource = source
+        if let source = source {
+            CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
         }
-        globalKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if handler(event) { DispatchQueue.main.async { self?.stop() } }
-        }
-        localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if handler(event) {
-                self?.stop()
-                return nil
-            }
-            return event
-        }
+        CGEvent.tapEnable(tap: tap, enable: true)
     }
 
     private func removeStopShortcut() {
-        if let m = globalKeyMonitor { NSEvent.removeMonitor(m) }
-        if let m = localKeyMonitor { NSEvent.removeMonitor(m) }
-        globalKeyMonitor = nil
-        localKeyMonitor = nil
+        if let tap = stopEventTap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+        }
+        if let source = stopRunLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes)
+        }
+        stopEventTap = nil
+        stopRunLoopSource = nil
+        if MacroExecutor.activeStopTarget === self {
+            MacroExecutor.activeStopTarget = nil
+        }
     }
 
     let actions: [MacroStepKind: MacroAction] = [

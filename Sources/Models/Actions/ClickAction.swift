@@ -4,6 +4,7 @@ import Foundation
 struct ClickAction: MacroAction {
     func execute(step: MacroStep) async -> Bool {
         let source = CGEventSource(stateID: .hidSystemState)
+        source?.localEventsSuppressionInterval = 0
         let target = CGPoint(x: step.clickX, y: step.clickY)
 
         let currentPos = CGEvent(source: nil)?.location ?? target
@@ -27,7 +28,9 @@ struct ClickAction: MacroAction {
             }
         }
 
-        try? await Task.sleep(for: .milliseconds(30))
+        CGWarpMouseCursorPosition(target)
+        CGAssociateMouseAndMouseCursorPosition(1)
+        try? await Task.sleep(for: .milliseconds(60))
         if Task.isCancelled { return false }
 
         guard let downEvent = CGEvent(mouseEventSource: source, mouseType: .leftMouseDown, mouseCursorPosition: target, mouseButton: .left),

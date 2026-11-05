@@ -91,6 +91,26 @@ struct MacroStepRowView: View {
 
     private var trailingControls: some View {
         HStack(spacing: 2) {
+            Button(action: onDuplicate) {
+                Image(systemName: "doc.on.doc")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(IconActionButtonStyle())
+            .help("Duplicar ação")
+
+            Button(action: onRemove) {
+                Image(systemName: "trash")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.red)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(IconActionButtonStyle(tint: .red))
+            .help("Remover ação")
+
             Menu {
                 Button {
                     onMoveUp()
@@ -105,20 +125,6 @@ struct MacroStepRowView: View {
                     Label("Mover para baixo", systemImage: "chevron.down")
                 }
                 .disabled(position == total - 1)
-
-                Button {
-                    onDuplicate()
-                } label: {
-                    Label("Duplicar", systemImage: "doc.on.doc")
-                }
-
-                Divider()
-
-                Button(role: .destructive) {
-                    onRemove()
-                } label: {
-                    Label("Remover", systemImage: "trash")
-                }
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 12, weight: .semibold))

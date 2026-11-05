@@ -32,10 +32,13 @@ struct ClickAction: MacroAction {
               let upEvent = CGEvent(mouseEventSource: source, mouseType: .leftMouseUp, mouseCursorPosition: target, mouseButton: .left)
         else { return false }
 
+        downEvent.setIntegerValueField(.mouseEventClickState, value: 1)
+        upEvent.setIntegerValueField(.mouseEventClickState, value: 1)
+
         downEvent.post(tap: .cghidEventTap)
-        try? await Task.sleep(for: .milliseconds(80))
+        try? await Task.sleep(for: .milliseconds(100))
         upEvent.post(tap: .cghidEventTap)
-        try? await Task.sleep(for: .milliseconds(50))
+        try? await Task.sleep(for: .milliseconds(80))
         return true
     }
 }

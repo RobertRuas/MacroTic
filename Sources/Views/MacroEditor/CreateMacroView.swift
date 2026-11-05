@@ -238,6 +238,7 @@ struct CreateMacroView: View {
                 }
             }
             .padding(.vertical, 2)
+            .padding(.bottom, 16)
         }
     }
 

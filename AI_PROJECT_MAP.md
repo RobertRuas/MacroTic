@@ -74,11 +74,15 @@ All Swift source files live under `Sources/`. SPM compiles every `.swift` file a
 ```
 Sources/
 ├── App/
-│   ├── MacroTicApp.swift          ENTRY POINT. @main enum MacroTicApp; AppDelegate creates MainWindowController
-│   │                              and quits when the last window closes.
+│   ├── MacroTicApp.swift          ENTRY POINT. @main enum MacroTicApp; AppDelegate creates MainWindowController,
+│   │                              quits when the last window closes, and calls AXIsProcessTrustedWithOptions (prompt: true)
+│   │                              on launch so macOS registers the app under Accessibility and prompts the user if needed
+│   │                              (required for CGEvent posting in MacroExecutor to actually have any effect).
 │   ├── MainWindowController.swift Creates the classic NSWindow (titled, closable, miniaturizable, resizable,
 │   │                              750x510, min 750x510, centered, zoom/maximize disabled) hosting MainWindowView. Owns AppState.
-│   │                              Observes state.isCreatingMacro via withObservationTracking and swaps to a separate 680x540
+│   │                              Attaches a native NSToolbar (unified style, NSToolbarDelegate on self) with a single
+│   │                              flexible-space + gearshape item that toggles state.selectedSection between .home/.settings
+│   │                              (no sidebar). Observes state.isCreatingMacro via withObservationTracking and swaps to a separate 680x540
 │   │                              editor window (titled "Nova Macro"/"Editar Macro", no zoom/miniaturize) that hosts
 │   │                              CreateMacroView; while the editor is open the main window is orderOut'd. windowShouldClose on
 │   │                              the editor is intercepted and routed to cancel (clears editingMacroID + isCreatingMacro,
@@ -90,7 +94,7 @@ Sources/
 │   ├── AppSection.swift           Sidebar entries (enum: home, settings — id, title, icon). Add a case to add a sidebar row.
 │   ├── AppState.swift             @Observable: selectedSection, updater, isCreatingMacro flag + macroDraft + editingMacroID, macroStore, macroExecutor, actionRecorder. Methods: beginCreatingMacro(), beginEditingMacro(), saveMacro() (handles create vs edit), deleteMacro() (animated), playMacro(), stopMacro(), startRecording(), stopRecording(), toggleEditorRecording() (in-editor record: starts recorder, on stop appends captured steps to the current draft).
 │   ├── Macro.swift                Domain model (struct, Codable): id, name, details, iconName, steps:[MacroStep], intervalBetweenSteps (default 0.5s), repeatCount (default 1, executor repeats the whole sequence), createdAt, lastUsedAt, executionCount. Provides createdAtLabel (dd/MM/yyyy HH:mm) and lastUsedLabel computed properties. Backwards-compatible Codable (decodeIfPresent for intervalBetweenSteps).
-│   ├── MacroExecutor.swift        @Observable orchestrator. Delegates each step to the matching MacroAction from Actions/. Runs on Task.detached (background), updates state on MainActor. Waits intervalBetweenSteps between each step. Tracks state (idle/running/paused/finished/error). Restores the cursor to its original position when the macro ends/stops. On finish/error/stop calls activateApp() to bring MacroTic's window back to the front. ⌘Esc (global + local key monitor, installed while running) stops the macro. Methods: execute(), pause(), resume(), stop().
+│   ├── MacroExecutor.swift        @Observable orchestrator. Delegates each step to the matching MacroAction from Actions/. Before running, checks AXIsProcessTrusted() and, if not granted, sets state to .error with an instructional message, re-prompts via AXIsProcessTrustedWithOptions, and opens System Settings → Accessibility (CGEvent posting is silently a no-op without this permission). Runs on Task.detached (background), updates state on MainActor. Waits intervalBetweenSteps between each step. Tracks state (idle/running/paused/finished/error). Restores the cursor to its original position when the macro ends/stops. On finish/error/stop calls activateApp() to bring MacroTic's window back to the front. ⌘Esc (global + local key monitor, installed while running) stops the macro. Methods: execute(), pause(), resume(), stop().
 │   ├── Actions/
 │   │   ├── MacroAction.swift          Protocol: `execute(step:) -> Bool`. All action types conform to this.
 │   │   ├── KeyShortcutAction.swift    Parses step.value via ShortcutKeyMap, presses modifier keys (flagsChanged), posts key down/up, releases modifiers.
@@ -108,7 +112,7 @@ Sources/
 │   ├── MacroStepKind.swift        Step types (enum: keyShortcut, typeText, click, delay, launchApp, dragAndDrop, scroll; openURL was removed — legacy steps are dropped on load via Macro's lossy decode). Each provides title, icon, tint color, placeholder, and boolean flags: usesDelay, usesCoordinates, usesDragCoordinates, usesScroll, usesShortcutRecorder, usesWindowPicker, usesTextField.
 │   └── MacroDraft.swift           @Observable editor/form state for building a macro: name, details, iconName, steps, intervalBetweenSteps, selectedStepID + add/remove/moveUp/moveDown/moveSelectedUp/moveSelectedDown, isValid, loadFrom(Macro), makeMacro(), makeMacro(preservingID:). Retained on AppState so edits survive view re-renders.
 └── Views/
-    ├── MainWindowView.swift       Wraps everything in a GeometryReader: NavigationSplitView above + StatusBarView below showing the current window size ("W × H px", includes safe-area insets so it equals the window content size). NavigationSplitView: sidebar List of AppSection (bound to state.selectedSection); detail shows HomeView(state:) for .home, SettingsView for .settings, empty otherwise.
+    ├── MainWindowView.swift       Wraps everything in a GeometryReader: content above + StatusBarView below showing the current window size ("W × H px", includes safe-area insets so it equals the window content size). No sidebar — content switches directly on state.selectedSection: SettingsView for .settings, HomeView(state:) otherwise. The toolbar gear button that drives selectedSection lives in MainWindowController (native NSToolbar).
     ├── Components/
     │   ├── StatusBarView.swift  Classic bottom status bar. StatusBarView { content } = top divider + 22pt bar (.bar material, 11pt secondary text); StatusBarItem(icon:, text) = one cell with a trailing vertical divider. Add more cells inside the StatusBarView closure in MainWindowView.
     │   └── IconActionButtonStyle.swift  Reusable ButtonStyle for small icon buttons. Uses configuration.isPressed only (no @State): on press, shrinks (scaleEffect 0.80) and flashes a tinted rounded background (tint param, default .primary). Gives visible click feedback. Applied to MacroRowView play/stop/edit/delete.

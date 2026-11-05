@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 
 @main
 enum MacroTicApp {
@@ -21,5 +22,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         windowController = MainWindowController()
         NSApp.activate(ignoringOtherApps: true)
+        requestAccessibilityPermissionIfNeeded()
+    }
+
+    private func requestAccessibilityPermissionIfNeeded() {
+        let options = [kAXTrustedCheckOptionPrompt.takeRetainedValue() as String: true] as CFDictionary
+        _ = AXIsProcessTrustedWithOptions(options)
     }
 }

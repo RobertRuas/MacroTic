@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import Foundation
 
 enum MacroExecutionState: Equatable {
@@ -66,6 +67,17 @@ final class MacroExecutor {
 
     func execute(_ macro: Macro) {
         guard !isRunning else { return }
+
+        guard AXIsProcessTrusted() else {
+            state = .error("Permissão de Acessibilidade necessária. Ative o MacroTic em Ajustes do Sistema → Privacidade e Segurança → Acessibilidade.")
+            let options = [kAXTrustedCheckOptionPrompt.takeRetainedValue() as String: true] as CFDictionary
+            _ = AXIsProcessTrustedWithOptions(options)
+            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                NSWorkspace.shared.open(url)
+            }
+            return
+        }
+
         shouldStop = false
         isPaused = false
 

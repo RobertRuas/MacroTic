@@ -1,10 +1,12 @@
 import AppKit
 import SwiftUI
 
-final class MainWindowController: NSObject, NSWindowDelegate {
+final class MainWindowController: NSObject, NSWindowDelegate, NSToolbarDelegate {
     private let window: NSWindow
     private var editorWindow: NSWindow?
     let state = AppState()
+
+    private static let settingsItemID = NSToolbarItem.Identifier("settings")
 
     override init() {
         window = NSWindow(
@@ -18,9 +20,37 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         window.contentMinSize = NSSize(width: 750, height: 510)
         window.contentView = NSHostingView(rootView: MainWindowView(state: state))
         window.standardWindowButton(.zoomButton)?.isEnabled = false
+        window.toolbarStyle = .unified
+        let toolbar = NSToolbar(identifier: "MainToolbar")
+        toolbar.delegate = self
+        toolbar.displayMode = .iconOnly
+        window.toolbar = toolbar
         window.center()
         window.makeKeyAndOrderFront(nil)
         observeEditingState()
+    }
+
+    func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier, willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
+        guard itemIdentifier == Self.settingsItemID else { return nil }
+        let item = NSToolbarItem(itemIdentifier: itemIdentifier)
+        item.label = "Configurações"
+        item.toolTip = "Configurações"
+        item.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: "Configurações")
+        item.target = self
+        item.action = #selector(toggleSettings)
+        return item
+    }
+
+    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        [.flexibleSpace, Self.settingsItemID]
+    }
+
+    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        [.flexibleSpace, Self.settingsItemID]
+    }
+
+    @objc private func toggleSettings() {
+        state.selectedSection = state.selectedSection == .settings ? .home : .settings
     }
 
     private func observeEditingState() {

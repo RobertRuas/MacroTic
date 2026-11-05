@@ -48,7 +48,7 @@ jobs:
           security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$CODESIGN_P12_PASSWORD" -T /usr/bin/codesign -A
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-          openssl pkcs12 -in "$CERT_PATH" -passin "pass:$CODESIGN_P12_PASSWORD" -clcerts -nokeys -out "$RUNNER_TEMP/codesign.pem"
+          security find-certificate -c "MacroTic Code Signing" -p "$KEYCHAIN_PATH" > "$RUNNER_TEMP/codesign.pem"
           security add-trusted-cert -r trustRoot -p codeSign -k "$KEYCHAIN_PATH" "$RUNNER_TEMP/codesign.pem"
 
           security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/"//g')

@@ -25,6 +25,10 @@ final class UpdaterController {
                 self?.canCheckForUpdates = change.newValue ?? false
             }
         }
+
+        if isAvailable {
+            standardController.updater.checkForUpdatesInBackground()
+        }
     }
 
     func checkForUpdates() {

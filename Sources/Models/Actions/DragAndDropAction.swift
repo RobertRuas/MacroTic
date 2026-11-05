@@ -15,6 +15,7 @@ struct DragAndDropAction: MacroAction {
         if distance > 2 {
             let approachSteps = max(20, min(60, Int(distance / 8)))
             for i in 1...approachSteps {
+                if Task.isCancelled { return false }
                 let t = Double(i) / Double(approachSteps)
                 let eased = t * t * (3.0 - 2.0 * t)
                 let x = currentPos.x + dx * eased
@@ -34,22 +35,26 @@ struct DragAndDropAction: MacroAction {
         try? await Task.sleep(for: .milliseconds(120))
 
         let dragSteps = 30
+        var cancelled = false
         for i in 1...dragSteps {
+            if Task.isCancelled { cancelled = true; break }
             let progress = Double(i) / Double(dragSteps)
             let eased = progress * progress * (3.0 - 2.0 * progress)
             let currentX = step.dragStartX + (step.dragEndX - step.dragStartX) * eased
             let currentY = step.dragStartY + (step.dragEndY - step.dragStartY) * eased
             let currentPoint = CGPoint(x: currentX, y: currentY)
 
-            guard let dragEvent = CGEvent(mouseEventSource: source, mouseType: .leftMouseDragged, mouseCursorPosition: currentPoint, mouseButton: .left) else { return false }
+            guard let dragEvent = CGEvent(mouseEventSource: source, mouseType: .leftMouseDragged, mouseCursorPosition: currentPoint, mouseButton: .left) else { break }
             dragEvent.post(tap: .cghidEventTap)
             try? await Task.sleep(for: .milliseconds(12))
         }
 
+        // Always release the button pressed above, even if cancelled, to avoid a stuck drag.
         try? await Task.sleep(for: .milliseconds(50))
-        guard let mouseUp = CGEvent(mouseEventSource: source, mouseType: .leftMouseUp, mouseCursorPosition: endPoint, mouseButton: .left) else { return false }
-        mouseUp.post(tap: .cghidEventTap)
+        if let mouseUp = CGEvent(mouseEventSource: source, mouseType: .leftMouseUp, mouseCursorPosition: endPoint, mouseButton: .left) {
+            mouseUp.post(tap: .cghidEventTap)
+        }
         try? await Task.sleep(for: .milliseconds(50))
-        return true
+        return !cancelled
     }
 }

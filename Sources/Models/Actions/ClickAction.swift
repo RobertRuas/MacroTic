@@ -14,6 +14,7 @@ struct ClickAction: MacroAction {
         if distance > 2 {
             let moveSteps = max(20, min(60, Int(distance / 8)))
             for i in 1...moveSteps {
+                if Task.isCancelled { return false }
                 let t = Double(i) / Double(moveSteps)
                 let eased = t * t * (3.0 - 2.0 * t)
                 let x = currentPos.x + dx * eased
@@ -27,6 +28,7 @@ struct ClickAction: MacroAction {
         }
 
         try? await Task.sleep(for: .milliseconds(30))
+        if Task.isCancelled { return false }
 
         guard let downEvent = CGEvent(mouseEventSource: source, mouseType: .leftMouseDown, mouseCursorPosition: target, mouseButton: .left),
               let upEvent = CGEvent(mouseEventSource: source, mouseType: .leftMouseUp, mouseCursorPosition: target, mouseButton: .left)

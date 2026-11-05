@@ -14,6 +14,7 @@ struct TypeTextAction: MacroAction {
         let source = CGEventSource(stateID: .hidSystemState)
 
         for char in text {
+            if Task.isCancelled { return false }
             guard let event = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
                   let upEvent = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
             else { return false }

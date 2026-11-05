@@ -38,6 +38,7 @@ struct ScrollAction: MacroAction {
     private func scroll(_ total: Int, unit: CGScrollEventUnit, perEvent: Int, delayMs: Int, sign: Int, vertical: Bool, source: CGEventSource?) async -> Bool {
         var remaining = total
         while remaining > 0 {
+            if Task.isCancelled { return false }
             let amount = min(perEvent, remaining)
             remaining -= amount
             let value = Int32(amount * sign)

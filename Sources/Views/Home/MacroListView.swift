@@ -76,7 +76,7 @@ struct MacroListView: View {
     private func macroRow(_ macro: Macro) -> some View {
         MacroRowView(
             macro: macro,
-            isRunning: executor.isRunning,
+            isRunning: executor.isRunning && executor.runningMacroID == macro.id,
             onPlay: { onPlay(macro) },
             onStop: { onStop() },
             onEdit: { onEdit(macro) },

@@ -148,6 +148,27 @@ struct MacroStep: Identifiable, Hashable, Codable {
 }
 
 extension MacroStep {
+    func copyWithNewID() -> MacroStep {
+        var copy = MacroStep(kind: kind)
+        copy.value = value
+        copy.delay = delay
+        copy.clickX = clickX
+        copy.clickY = clickY
+        copy.dragStartX = dragStartX
+        copy.dragStartY = dragStartY
+        copy.dragEndX = dragEndX
+        copy.dragEndY = dragEndY
+        copy.scrollDirection = scrollDirection
+        copy.scrollAmount = scrollAmount
+        copy.scrollMovesMouse = scrollMovesMouse
+        copy.scrollX = scrollX
+        copy.scrollY = scrollY
+        copy.scrollUnit = scrollUnit
+        copy.scrollStepDelayMs = scrollStepDelayMs
+        copy.textMode = textMode
+        return copy
+    }
+
     mutating func setClickPoint(_ point: CGPoint) {
         clickX = point.x
         clickY = point.y

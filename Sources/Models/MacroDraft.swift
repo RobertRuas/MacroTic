@@ -81,19 +81,7 @@ final class MacroDraft {
 
     func duplicate(_ id: UUID) {
         guard let index = steps.firstIndex(where: { $0.id == id }) else { return }
-        var copy = steps[index]
-        copy = MacroStep(kind: copy.kind)
-        copy.value = steps[index].value
-        copy.delay = steps[index].delay
-        copy.clickX = steps[index].clickX
-        copy.clickY = steps[index].clickY
-        copy.dragStartX = steps[index].dragStartX
-        copy.dragStartY = steps[index].dragStartY
-        copy.dragEndX = steps[index].dragEndX
-        copy.dragEndY = steps[index].dragEndY
-        copy.scrollDirection = steps[index].scrollDirection
-        copy.scrollAmount = steps[index].scrollAmount
-        steps.insert(copy, at: index + 1)
+        steps.insert(steps[index].copyWithNewID(), at: index + 1)
     }
 
     func loadFrom(_ macro: Macro) {

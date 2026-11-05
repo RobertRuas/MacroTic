@@ -13,6 +13,7 @@ enum MacroExecutionState: Equatable {
 @Observable
 final class MacroExecutor {
     var state: MacroExecutionState = .idle
+    private(set) var runningMacroID: UUID?
     var currentRepetition: Int = 1
     var totalRepetitions: Int = 1
     private var shouldStop = false
@@ -66,7 +67,7 @@ final class MacroExecutor {
     }
 
     func execute(_ macro: Macro) {
-        guard !isRunning else { return }
+        guard !isRunning, !isPausedState else { return }
 
         guard AXIsProcessTrusted() else {
             state = .error("Permissão de Acessibilidade necessária. Ative o MacroTic em Ajustes do Sistema → Privacidade e Segurança → Acessibilidade.")
@@ -80,6 +81,7 @@ final class MacroExecutor {
 
         shouldStop = false
         isPaused = false
+        runningMacroID = macro.id
 
         let originalCursor = CGEvent(source: nil)?.location
         installStopShortcut()
@@ -119,6 +121,7 @@ final class MacroExecutor {
                     guard let action = self.actions[step.kind] else {
                         await MainActor.run {
                             self.removeStopShortcut()
+                            self.runningMacroID = nil
                             self.state = .error("Ação desconhecida: \(step.kind.title)")
                             self.activateApp()
                         }
@@ -129,6 +132,7 @@ final class MacroExecutor {
                     if !success {
                         await MainActor.run {
                             self.removeStopShortcut()
+                            self.runningMacroID = nil
                             self.state = .error("Falha ao executar passo \(index + 1): \(step.kind.title)")
                             self.activateApp()
                         }
@@ -149,6 +153,7 @@ final class MacroExecutor {
 
             await MainActor.run {
                 self.removeStopShortcut()
+                self.runningMacroID = nil
                 if !self.shouldStop {
                     self.state = .finished
                 } else {
@@ -194,6 +199,7 @@ final class MacroExecutor {
         isPaused = false
         currentTask?.cancel()
         currentTask = nil
+        runningMacroID = nil
         state = .idle
         activateApp()
     }

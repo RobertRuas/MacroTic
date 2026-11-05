@@ -95,7 +95,15 @@ final class ActionRecorder {
         return formatter.string(from: Date())
     }
 
+    private func isPointInOwnWindow(_ cgPoint: CGPoint) -> Bool {
+        let screenHeight = NSScreen.main?.frame.height ?? 0
+        let cocoaPoint = NSPoint(x: cgPoint.x, y: screenHeight - cgPoint.y)
+        return NSApp.windows.contains { $0.isVisible && $0.frame.contains(cocoaPoint) }
+    }
+
     private func handleEvent(eventType: CGEventType, event: CGEvent) {
+        if eventType == .leftMouseDown && isPointInOwnWindow(event.location) { return }
+
         let now = Date()
         if let last = lastEventTime {
             let delay = now.timeIntervalSince(last)

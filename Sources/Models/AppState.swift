@@ -1,3 +1,4 @@
+import ApplicationServices
 import SwiftUI
 
 @Observable
@@ -54,8 +55,11 @@ final class AppState {
     }
 
     func playMacro(_ macro: Macro) {
+        guard !macroExecutor.isRunning else { return }
         macroExecutor.execute(macro)
-        macroStore.markUsed(macro.id)
+        if AXIsProcessTrusted() {
+            macroStore.markUsed(macro.id)
+        }
     }
 
     func stopMacro() {

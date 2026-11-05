@@ -2,7 +2,10 @@
 # Builds MacroTic.app from the release binary and zips it for distribution.
 # Expects `swift build -c release` to have already run.
 # Env vars: APP_VERSION (required), APP_OWNER, APP_REPO (GitHub owner/repo for the Sparkle feed URL),
-#           SPARKLE_PUBLIC_KEY (EdDSA public key for Sparkle update verification)
+#           SPARKLE_PUBLIC_KEY (EdDSA public key for Sparkle update verification),
+#           CODESIGN_IDENTITY (optional: a stable code signing identity's common name, e.g. "MacroTic Code Signing".
+#           Falls back to ad-hoc ("-") when unset, but ad-hoc signatures are unique per build, which makes macOS
+#           reset TCC grants (Accessibility, etc.) on every update. Release builds must set this.)
 set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -13,6 +16,7 @@ VERSION="${APP_VERSION:?APP_VERSION must be set}"
 OWNER="${APP_OWNER:-__OWNER__}"
 REPO="${APP_REPO:-__REPO__}"
 PUBLIC_KEY="${SPARKLE_PUBLIC_KEY:-__SPARKLE_PUBLIC_KEY__}"
+SIGN_IDENTITY="${CODESIGN_IDENTITY:--}"
 
 BUILD_DIR="build"
 DIST_DIR="dist"
@@ -42,9 +46,9 @@ sed \
 
 find "$APP_BUNDLE/Contents/Frameworks/Sparkle.framework" \
     \( -name "*.xpc" -o -name "Autoupdate" -o -name "Updater.app" \) \
-    -exec codesign --force --sign - {} \;
-codesign --force --deep --sign - "$APP_BUNDLE/Contents/Frameworks/Sparkle.framework"
-codesign --force --deep --sign - "$APP_BUNDLE"
+    -exec codesign --force --sign "$SIGN_IDENTITY" {} \;
+codesign --force --deep --sign "$SIGN_IDENTITY" "$APP_BUNDLE/Contents/Frameworks/Sparkle.framework"
+codesign --force --deep --sign "$SIGN_IDENTITY" "$APP_BUNDLE"
 
 (cd "$BUILD_DIR" && ditto -c -k --sequesterRsrc --keepParent "$APP_NAME.app" "../$DIST_DIR/$APP_NAME-$VERSION.zip")
 

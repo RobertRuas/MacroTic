@@ -101,16 +101,16 @@ final class MacroExecutor {
             }
 
             for repetition in 1...repetitions {
-                if self.shouldStop { break }
+                if self.shouldStop || Task.isCancelled { break }
                 await MainActor.run { self.currentRepetition = repetition }
                 for (index, step) in steps.enumerated() {
-                    if self.shouldStop { break }
+                    if self.shouldStop || Task.isCancelled { break }
 
                     while self.isPaused {
-                        if self.shouldStop { break }
+                        if self.shouldStop || Task.isCancelled { break }
                         try? await Task.sleep(for: .milliseconds(100))
                     }
-                    if self.shouldStop { break }
+                    if self.shouldStop || Task.isCancelled { break }
 
                     await MainActor.run {
                         self.state = .running(stepIndex: index, totalSteps: steps.count)
@@ -135,6 +135,8 @@ final class MacroExecutor {
                         return
                     }
 
+                    if (self.shouldStop || Task.isCancelled) { break }
+
                     if index < steps.count - 1 || repetition < repetitions {
                         try? await Task.sleep(for: .milliseconds(Int(interval * 1000)))
                     }
@@ -154,8 +156,19 @@ final class MacroExecutor {
     }
 
     private func activateApp() {
-        NSApp.activate(ignoringOtherApps: true)
-        NSApp.windows.first { $0.isVisible && !$0.isKind(of: NSPanel.self) }?.makeKeyAndOrderFront(nil)
+        func bringToFront() {
+            NSApp.unhide(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            NSApp.windows.first { $0.isVisible && !$0.isKind(of: NSPanel.self) }?.orderFrontRegardless()
+        }
+        bringToFront()
+        // The app just spent the whole macro run losing focus to whatever it was automating;
+        // the very next activation request can lose a focus race against that app settling back in.
+        for delay in [0.15, 0.4] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                bringToFront()
+            }
+        }
     }
 
     func pause() {

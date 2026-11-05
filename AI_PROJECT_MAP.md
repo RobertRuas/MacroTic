@@ -32,7 +32,10 @@ MacroTic/
                                 (via Scripts/package_app.sh), signs it for Sparkle and generates the appcast
                                 (via Scripts/build_appcast.sh), creates a GitHub Release with the .zip + appcast.xml,
                                 then deletes every other release so only the latest stays published.
-                                Needs repo secrets: SPARKLE_PRIVATE_KEY, SPARKLE_PUBLIC_KEY (see Scripts/generate_sparkle_keys.sh).
+                                Needs repo secrets: SPARKLE_PRIVATE_KEY, SPARKLE_PUBLIC_KEY (see Scripts/generate_sparkle_keys.sh), and
+                                CODESIGN_P12_BASE64, CODESIGN_P12_PASSWORD, CODESIGN_IDENTITY for the stable self-signed code signing
+                                identity (imports the cert into a throwaway keychain, trusts it for codeSign, deletes the keychain
+                                at the end regardless of job outcome).
 
 Packaging/
 └── Info.plist                 Template Info.plist for the packaged app. Placeholders __VERSION__, __OWNER__, __REPO__,
@@ -44,8 +47,10 @@ Packaging/
 
 Scripts/
 ├── package_app.sh              Builds build/MacroTic.app from .build/release, embeds Sparkle.framework into
-│                                Contents/Frameworks, fills in Packaging/Info.plist, ad-hoc codesigns (deep, including
-│                                Sparkle's nested XPC services/Autoupdate/Updater.app), zips to dist/MacroTic-<version>.zip.
+│                                Contents/Frameworks, fills in Packaging/Info.plist, codesigns (deep, including
+│                                Sparkle's nested XPC services/Autoupdate/Updater.app) using $CODESIGN_IDENTITY — the stable
+│                                self-signed "MacroTic Code Signing" identity in CI/release builds, falling back to ad-hoc
+│                                ("-") for local dev builds where it isn't set — then zips to dist/MacroTic-<version>.zip.
 ├── build_appcast.sh             Downloads the Sparkle CLI tools matching Package.resolved's pinned version, runs
 │                                generate_appcast against dist/ to sign the zip (EdDSA) and emit dist/appcast.xml.
 │                                Reads the private key from SPARKLE_PRIVATE_KEY (never written to disk outside a temp file).
@@ -55,8 +60,12 @@ Scripts/
                                  SPARKLE_PUBLIC_KEY.
 ```
 
-No code signing certificate / Apple Developer ID is configured yet — builds are ad-hoc signed only, so
-first launch after download/update will show a Gatekeeper warning until a Developer ID is added later.
+Release builds are signed with a stable self-signed code signing identity ("MacroTic Code Signing", no Apple Developer ID /
+Team ID) instead of ad-hoc. This keeps the app's designated requirement identical across every release, so macOS TCC grants
+(Accessibility, etc.) survive an auto-update instead of resetting on every new signature — which ad-hoc signing (ever-changing
+per-build hash) caused. It does NOT satisfy Gatekeeper/notarization: first launch after install/update still shows a Gatekeeper
+warning until a paid Apple Developer ID + notarization is added. The same identity is imported into the login keychain on this
+machine for local release packaging; CI imports it into a throwaway keychain per run from the CODESIGN_P12_BASE64 secret.
 
 ## Config
 

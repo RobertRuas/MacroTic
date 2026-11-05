@@ -32,12 +32,35 @@ jobs:
       - name: Build release binary
         run: swift build -c release
 
+      - name: Import code signing certificate
+        env:
+          CODESIGN_P12_BASE64: ${{ secrets.CODESIGN_P12_BASE64 }}
+          CODESIGN_P12_PASSWORD: ${{ secrets.CODESIGN_P12_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/codesign.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          CERT_PATH="$RUNNER_TEMP/codesign.p12"
+          echo "$CODESIGN_P12_BASE64" | base64 --decode > "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$CODESIGN_P12_PASSWORD" -T /usr/bin/codesign -A
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          openssl pkcs12 -in "$CERT_PATH" -passin "pass:$CODESIGN_P12_PASSWORD" -clcerts -nokeys -out "$RUNNER_TEMP/codesign.pem"
+          security add-trusted-cert -r trustRoot -p codeSign -k "$KEYCHAIN_PATH" "$RUNNER_TEMP/codesign.pem"
+
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/"//g')
+          rm -f "$CERT_PATH" "$RUNNER_TEMP/codesign.pem"
+
       - name: Package MacroTic.app
         env:
           APP_VERSION: ${{ steps.version.outputs.version }}
           APP_OWNER: ${{ github.repository_owner }}
           APP_REPO: ${{ github.event.repository.name }}
           SPARKLE_PUBLIC_KEY: ${{ secrets.SPARKLE_PUBLIC_KEY }}
+          CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
         run: bash Scripts/package_app.sh
 
       - name: Sign update and build appcast
@@ -65,3 +88,7 @@ jobs:
               gh release delete "$tag" --yes
             fi
           done
+
+      - name: Remove signing keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/codesign.keychain-db" || true

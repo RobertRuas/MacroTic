@@ -37,21 +37,24 @@ jobs:
           CODESIGN_P12_BASE64: ${{ secrets.CODESIGN_P12_BASE64 }}
           CODESIGN_P12_PASSWORD: ${{ secrets.CODESIGN_P12_PASSWORD }}
         run: |
+          run() { echo "+ $*"; timeout 30 "$@" || { echo "::error::timed out or failed: $*"; exit 1; }; }
+
           KEYCHAIN_PATH="$RUNNER_TEMP/codesign.keychain-db"
           KEYCHAIN_PASSWORD="$(uuidgen)"
           CERT_PATH="$RUNNER_TEMP/codesign.p12"
           echo "$CODESIGN_P12_BASE64" | base64 --decode > "$CERT_PATH"
 
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$CODESIGN_P12_PASSWORD" -T /usr/bin/codesign -A
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          run security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          run security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          run security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          run security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$CODESIGN_P12_PASSWORD" -T /usr/bin/codesign -A
+          run security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-          security find-certificate -c "MacroTic Code Signing" -p "$KEYCHAIN_PATH" > "$RUNNER_TEMP/codesign.pem"
-          security add-trusted-cert -r trustRoot -p codeSign -k "$KEYCHAIN_PATH" "$RUNNER_TEMP/codesign.pem"
+          echo "+ security find-certificate -c 'MacroTic Code Signing' -p $KEYCHAIN_PATH"
+          timeout 30 security find-certificate -c "MacroTic Code Signing" -p "$KEYCHAIN_PATH" > "$RUNNER_TEMP/codesign.pem" \
+            || { echo "::error::timed out finding certificate"; exit 1; }
 
-          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/"//g')
+          run security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/"//g')
           rm -f "$CERT_PATH" "$RUNNER_TEMP/codesign.pem"
 
       - name: Package MacroTic.app

@@ -34,16 +34,23 @@ final class AppState {
     func saveMacro(_ macro: Macro) {
         if let editID = editingMacroID,
            let original = macroStore.macros.first(where: { $0.id == editID }) {
-            let updated = macroDraft.makeMacro(
+            var updated = macroDraft.makeMacro(
                 preservingID: editID,
                 createdAt: original.createdAt,
                 lastUsedAt: original.lastUsedAt,
                 executionCount: original.executionCount
             )
+            updated.isFavorite = original.isFavorite
             macroStore.save(updated)
         } else {
             macroStore.save(macro)
+            // After a first save, keep editing the same macro so further saves update it
+            // (and "Salvar Alterações" doesn't keep creating duplicates).
+            editingMacroID = macro.id
         }
+    }
+
+    func closeEditor() {
         editingMacroID = nil
         isCreatingMacro = false
     }

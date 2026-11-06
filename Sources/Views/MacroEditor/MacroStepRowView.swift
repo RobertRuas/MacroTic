@@ -1,9 +1,23 @@
 import SwiftUI
 
+enum StepRowLayout {
+    static let selector: CGFloat = 26
+    static let handle: CGFloat = 16
+    static let index: CGFloat = 22
+    static let icon: CGFloat = 24
+    static let title: CGFloat = 116
+    static let spacing: CGFloat = 8
+}
+
 struct MacroStepRowView: View {
     let step: Binding<MacroStep>
     let position: Int
     let total: Int
+    var isSelected: Bool = false
+    var debugMode: Bool = false
+    var locked: Bool = false
+    var onSelect: () -> Void = {}
+    var onRunFrom: () -> Void = {}
     let onReorder: (UUID) -> Void
     let onMoveUp: () -> Void
     let onMoveDown: () -> Void
@@ -15,25 +29,40 @@ struct MacroStepRowView: View {
     private var kind: MacroStepKind { step.wrappedValue.kind }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
+        HStack(spacing: StepRowLayout.spacing) {
+            selector
+
             dragHandle
-            kindBadge
+                .disabled(locked)
 
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text(kind.title)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.primary)
-                    Spacer(minLength: 4)
-                }
-                editor
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            Text("\(position + 1)")
+                .font(.system(size: 11, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(.tertiary)
+                .frame(width: StepRowLayout.index, alignment: .trailing)
 
-            trailingControls
+            Image(systemName: kind.icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: StepRowLayout.icon, height: StepRowLayout.icon)
+                .background(kind.tint, in: RoundedRectangle(cornerRadius: 6))
+
+            Text(kind.title)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .frame(width: StepRowLayout.title, alignment: .leading)
+
+            editor
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .disabled(locked)
+
+            rowActions
+                .disabled(locked)
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .frame(minHeight: 38)
+        .background(isSelected ? Color.accentColor.opacity(0.10) : Color.clear)
         .overlay(alignment: .top) {
             Capsule()
                 .fill(Color.accentColor)
@@ -42,18 +71,51 @@ struct MacroStepRowView: View {
                 .padding(.horizontal, 12)
         }
         .animation(.easeInOut(duration: 0.15), value: isDropTarget)
+        .animation(.easeInOut(duration: 0.15), value: isSelected)
         .dropDestination(for: String.self) { items, _ in
-            guard let raw = items.first, let id = UUID(uuidString: raw) else { return false }
+            guard !locked, let raw = items.first, let id = UUID(uuidString: raw) else { return false }
             onReorder(id)
             return true
-        } isTargeted: { onDropTargetChange($0) }
+        } isTargeted: { targeted in
+            if !locked { onDropTargetChange(targeted) }
+        }
+        .overlay(alignment: .trailing) {
+            if debugMode && step.wrappedValue.supportsDebugPreview {
+                Image(systemName: "eye")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.teal)
+                    .padding(.trailing, 2)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
+        }
+        .onHover { hovering in
+            guard debugMode else { return }
+            if hovering && step.wrappedValue.supportsDebugPreview {
+                DebugPreviewOverlay.shared.show(for: step.wrappedValue)
+            } else {
+                DebugPreviewOverlay.shared.hide()
+            }
+        }
+    }
+
+    private var selector: some View {
+        Button(action: onSelect) {
+            Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.tertiary))
+                .frame(width: StepRowLayout.selector, height: 28)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Selecionar para mover (⌘↑/⌘↓) ou excluir")
     }
 
     private var dragHandle: some View {
         Image(systemName: "line.3.horizontal")
             .font(.system(size: 11, weight: .medium))
             .foregroundStyle(.tertiary)
-            .frame(width: 12, height: 28)
+            .frame(width: StepRowLayout.handle, height: 28)
             .contentShape(Rectangle())
             .help("Arraste para reordenar")
             .draggable(step.wrappedValue.id.uuidString) {
@@ -70,26 +132,7 @@ struct MacroStepRowView: View {
             }
     }
 
-    private var kindBadge: some View {
-        ZStack(alignment: .bottomTrailing) {
-            Image(systemName: kind.icon)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 28, height: 28)
-                .background(kind.tint, in: RoundedRectangle(cornerRadius: 7))
-
-            Text("\(position + 1)")
-                .font(.system(size: 9, weight: .bold))
-                .monospacedDigit()
-                .foregroundStyle(.white)
-                .padding(.horizontal, 4)
-                .padding(.vertical, 1)
-                .background(Color.black.opacity(0.55), in: Capsule())
-                .offset(x: 4, y: 4)
-        }
-    }
-
-    private var trailingControls: some View {
+    private var rowActions: some View {
         HStack(spacing: 2) {
             Button(action: onDuplicate) {
                 Image(systemName: "doc.on.doc")
@@ -113,15 +156,19 @@ struct MacroStepRowView: View {
 
             Menu {
                 Button {
-                    onMoveUp()
+                    onRunFrom()
                 } label: {
+                    Label("Executar a partir daqui", systemImage: "play.fill")
+                }
+
+                Divider()
+
+                Button(action: onMoveUp) {
                     Label("Mover para cima", systemImage: "chevron.up")
                 }
                 .disabled(position == 0)
 
-                Button {
-                    onMoveDown()
-                } label: {
+                Button(action: onMoveDown) {
                     Label("Mover para baixo", systemImage: "chevron.down")
                 }
                 .disabled(position == total - 1)

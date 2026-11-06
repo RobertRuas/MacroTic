@@ -16,7 +16,12 @@ enum MacroTicApp {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowController: MainWindowController!
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        // While a macro runs the app's windows are hidden on purpose (only the HUD panel stays).
+        // Don't let that count as "the last window closed" and quit the app mid-run.
+        if windowController?.isPresentingRun == true { return false }
+        return true
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)

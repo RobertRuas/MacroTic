@@ -11,6 +11,8 @@ struct Macro: Identifiable, Hashable, Codable {
     var createdAt: Date
     var lastUsedAt: Date?
     var executionCount: Int
+    var isFavorite: Bool
+    var isLocked: Bool
 
     init(
         id: UUID = UUID(),
@@ -31,6 +33,8 @@ struct Macro: Identifiable, Hashable, Codable {
         self.createdAt = Date()
         self.lastUsedAt = nil
         self.executionCount = 0
+        self.isFavorite = false
+        self.isLocked = false
     }
 
     var createdAtLabel: String {
@@ -57,7 +61,7 @@ struct Macro: Identifiable, Hashable, Codable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, details, iconName, steps, intervalBetweenSteps, repeatCount, createdAt, lastUsedAt, executionCount
+        case id, name, details, iconName, steps, intervalBetweenSteps, repeatCount, createdAt, lastUsedAt, executionCount, isFavorite, isLocked
     }
 
     init(from decoder: Decoder) throws {
@@ -72,6 +76,8 @@ struct Macro: Identifiable, Hashable, Codable {
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         lastUsedAt = try container.decodeIfPresent(Date.self, forKey: .lastUsedAt)
         executionCount = try container.decode(Int.self, forKey: .executionCount)
+        isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
+        isLocked = try container.decodeIfPresent(Bool.self, forKey: .isLocked) ?? false
     }
 }
 

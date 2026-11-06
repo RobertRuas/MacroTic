@@ -48,12 +48,17 @@ final class MacroStore {
         persist()
     }
 
-    var recentlyUsed: [Macro] {
-        macros
-            .filter { $0.lastUsedAt != nil }
-            .sorted { ($0.lastUsedAt ?? .distantPast) > ($1.lastUsedAt ?? .distantPast) }
-            .prefix(3)
-            .map { $0 }
+    func toggleFavorite(_ id: UUID) {
+        guard let index = macros.firstIndex(where: { $0.id == id }) else { return }
+        macros[index].isFavorite.toggle()
+        persist()
+    }
+
+    /// All macros, favorites first, each group keeping its existing (newest-first) order.
+    var sorted: [Macro] {
+        let favorites = macros.filter { $0.isFavorite }
+        let rest = macros.filter { !$0.isFavorite }
+        return favorites + rest
     }
 
     // MARK: - Export / Import

@@ -45,4 +45,33 @@ enum WindowCatalog {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         return windows().first { $0.title == trimmed }
     }
+
+    /// Screen rect (CG top-left origin) of the window with this title, if currently open.
+    static func frame(forTitle title: String) -> CGRect? {
+        guard let ref = window(forTitle: title) else { return nil }
+        let appElement = AXUIElementCreateApplication(ref.pid)
+        var windowsValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windowsValue) == .success,
+              let windows = windowsValue as? [AXUIElement] else { return nil }
+        for window in windows {
+            var titleValue: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &titleValue) == .success,
+                  let windowTitle = titleValue as? String,
+                  windowTitle.trimmingCharacters(in: .whitespacesAndNewlines) == ref.title else { continue }
+
+            var posValue: CFTypeRef?
+            var sizeValue: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(window, kAXPositionAttribute as CFString, &posValue) == .success,
+                  AXUIElementCopyAttributeValue(window, kAXSizeAttribute as CFString, &sizeValue) == .success,
+                  let posAX = posValue, CFGetTypeID(posAX) == AXValueGetTypeID(),
+                  let sizeAX = sizeValue, CFGetTypeID(sizeAX) == AXValueGetTypeID() else { return nil }
+
+            var point = CGPoint.zero
+            var size = CGSize.zero
+            AXValueGetValue(posAX as! AXValue, .cgPoint, &point)
+            AXValueGetValue(sizeAX as! AXValue, .cgSize, &size)
+            return CGRect(origin: point, size: size)
+        }
+        return nil
+    }
 }

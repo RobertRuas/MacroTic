@@ -96,7 +96,7 @@ final class MacroExecutor {
         return false
     }
 
-    func execute(_ macro: Macro) {
+    func execute(_ macro: Macro, startAt: Int = 0) {
         guard !isRunning, !isPausedState else { return }
 
         guard AXIsProcessTrusted() else {
@@ -117,7 +117,9 @@ final class MacroExecutor {
         installStopShortcut()
 
         let steps = macro.steps
-        let repetitions = max(1, macro.repeatCount)
+        let begin = max(0, min(startAt, steps.count))
+        // A partial run (starting past the first step) is a single pass; a full run honours repeatCount.
+        let repetitions = begin > 0 ? 1 : max(1, macro.repeatCount)
         currentRepetition = 1
         totalRepetitions = repetitions
         let interval = macro.intervalBetweenSteps
@@ -137,6 +139,7 @@ final class MacroExecutor {
                 await MainActor.run { self.currentRepetition = repetition }
                 for (index, step) in steps.enumerated() {
                     if self.shouldStop || Task.isCancelled { break }
+                    if repetition == 1 && index < begin { continue }
 
                     while self.isPaused {
                         if self.shouldStop || Task.isCancelled { break }
@@ -174,10 +177,6 @@ final class MacroExecutor {
                     if index < steps.count - 1 || repetition < repetitions {
                         try? await Task.sleep(for: .milliseconds(Int(interval * 1000)))
                     }
-                }
-
-                if !self.shouldStop && !Task.isCancelled && repetition < repetitions {
-                    await MainActor.run { self.activateApp() }
                 }
             }
 

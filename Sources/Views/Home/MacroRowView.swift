@@ -7,9 +7,20 @@ struct MacroRowView: View {
     let onStop: () -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
+    var onToggleFavorite: () -> Void = {}
 
     var body: some View {
         HStack(spacing: 14) {
+            Button(action: onToggleFavorite) {
+                Image(systemName: macro.isFavorite ? "star.fill" : "star")
+                    .font(.system(size: 13))
+                    .foregroundStyle(macro.isFavorite ? AnyShapeStyle(.yellow) : AnyShapeStyle(.tertiary))
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(IconActionButtonStyle(tint: .yellow))
+            .help(macro.isFavorite ? "Remover dos favoritos" : "Marcar como favorito")
+
             Image(systemName: macro.iconName)
                 .font(.system(size: 18, weight: .medium))
                 .foregroundStyle(.white)
@@ -125,6 +136,12 @@ struct MacroRowView: View {
                 onEdit()
             } label: {
                 Label("Editar", systemImage: "pencil")
+            }
+            Button {
+                onToggleFavorite()
+            } label: {
+                Label(macro.isFavorite ? "Remover dos favoritos" : "Favoritar",
+                      systemImage: macro.isFavorite ? "star.slash" : "star")
             }
             Divider()
             Button(role: .destructive) {

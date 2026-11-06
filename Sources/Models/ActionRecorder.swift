@@ -9,14 +9,13 @@ final class ActionRecorder {
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
-    private var lastEventTime: Date?
     private var recordingStartTime: Date?
     private var timer: Timer?
 
     private static var sharedRecorder: ActionRecorder?
 
     private let specialKeys: Set<CGKeyCode> = [
-        36, 48, 49, 51, 53, 76, 96, 97, 98, 99, 100, 101,
+        36, 48, 51, 53, 76, 96, 97, 98, 99, 100, 101,
         115, 116, 117, 119, 121, 123, 124, 125, 126
     ]
 
@@ -25,9 +24,7 @@ final class ActionRecorder {
         recordedSteps = []
         elapsedTime = 0
         isRecording = true
-        let now = Date()
-        lastEventTime = now
-        recordingStartTime = now
+        recordingStartTime = Date()
         ActionRecorder.sharedRecorder = self
 
         let eventMask: CGEventMask =
@@ -104,92 +101,119 @@ final class ActionRecorder {
     private func handleEvent(eventType: CGEventType, event: CGEvent) {
         if eventType == .leftMouseDown && isPointInOwnWindow(event.location) { return }
 
-        let now = Date()
-        if let last = lastEventTime {
-            let delay = now.timeIntervalSince(last)
-            if delay > 0.3 {
-                var delayStep = MacroStep(kind: .delay)
-                delayStep.delay = min(delay, 10.0)
-                recordedSteps.append(delayStep)
-            }
-        }
-        lastEventTime = now
-
         switch eventType {
         case .leftMouseDown:
             let location = event.location
             var step = MacroStep(kind: .click)
             step.clickX = location.x
             step.clickY = location.y
+            step.value = "(\(Int(location.x)), \(Int(location.y)))"
             recordedSteps.append(step)
 
         case .keyDown:
-            let keyCode = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
-            let flags = event.flags
-            let keyString = keyNameForCode(keyCode)
-
-            var modifiers: [String] = []
-            if flags.contains(.maskCommand) { modifiers.append("⌘") }
-            if flags.contains(.maskAlternate) { modifiers.append("⌥") }
-            if flags.contains(.maskShift) { modifiers.append("⇧") }
-            if flags.contains(.maskControl) { modifiers.append("⌃") }
-
-            let isSpecial = specialKeys.contains(keyCode)
-
-            if !modifiers.isEmpty || isSpecial {
-                var step = MacroStep(kind: .keyShortcut)
-                step.value = (modifiers + [keyString]).joined(separator: "+")
-                recordedSteps.append(step)
-            } else {
-                let chars = characterForKeyCode(keyCode)
-                if !chars.isEmpty {
-                    if let lastIndex = recordedSteps.indices.last,
-                       recordedSteps[lastIndex].kind == .typeText {
-                        recordedSteps[lastIndex].value += chars
-                    } else {
-                        var step = MacroStep(kind: .typeText)
-                        step.value = chars
-                        recordedSteps.append(step)
-                    }
-                }
-            }
+            handleKeyDown(event)
 
         case .scrollWheel:
-            let deltaY = event.getIntegerValueField(.scrollWheelEventDeltaAxis1)
-            let deltaX = event.getIntegerValueField(.scrollWheelEventDeltaAxis2)
-
-            let direction: ScrollDirection
-            let amount: Double
-
-            if abs(deltaY) >= abs(deltaX) {
-                direction = deltaY > 0 ? .up : .down
-                amount = Double(abs(deltaY))
-            } else {
-                direction = deltaX > 0 ? .left : .right
-                amount = Double(abs(deltaX))
-            }
-
-            guard amount > 0 else { break }
-
-            if let lastIndex = recordedSteps.indices.last,
-               recordedSteps[lastIndex].kind == .scroll,
-               recordedSteps[lastIndex].scrollDirection == direction {
-                recordedSteps[lastIndex].scrollAmount = min(recordedSteps[lastIndex].scrollAmount + amount, 50)
-                recordedSteps[lastIndex].value = "\(direction.title) ×\(Int(recordedSteps[lastIndex].scrollAmount))"
-            } else {
-                var step = MacroStep(kind: .scroll)
-                step.scrollDirection = direction
-                step.scrollAmount = min(amount, 50)
-                step.scrollMovesMouse = true
-                step.scrollX = event.location.x
-                step.scrollY = event.location.y
-                step.value = "\(direction.title) ×\(Int(step.scrollAmount))"
-                recordedSteps.append(step)
-            }
+            handleScroll(event)
 
         default:
             break
         }
+    }
+
+    private func handleKeyDown(_ event: CGEvent) {
+        // Ignore auto-repeat: holding a key must not duplicate a step.
+        if event.getIntegerValueField(.keyboardEventAutorepeat) != 0 { return }
+
+        let keyCode = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
+        let flags = event.flags
+        let hasCommand = flags.contains(.maskCommand)
+        let hasControl = flags.contains(.maskControl)
+        let hasOption = flags.contains(.maskAlternate)
+        let hasShift = flags.contains(.maskShift)
+        let isCommandCombo = hasCommand || hasControl || hasOption
+
+        // Backspace while typing edits the typed-text buffer instead of adding a step.
+        if keyCode == 51 && !isCommandCombo {
+            if let lastIndex = recordedSteps.indices.last,
+               recordedSteps[lastIndex].kind == .typeText,
+               !recordedSteps[lastIndex].value.isEmpty {
+                recordedSteps[lastIndex].value.removeLast()
+                if recordedSteps[lastIndex].value.isEmpty {
+                    recordedSteps.remove(at: lastIndex)
+                }
+                return
+            }
+        }
+
+        let isSpecial = specialKeys.contains(keyCode)
+
+        if isCommandCombo || isSpecial {
+            var modifiers: [String] = []
+            if hasCommand { modifiers.append("⌘") }
+            if hasOption { modifiers.append("⌥") }
+            if hasShift { modifiers.append("⇧") }
+            if hasControl { modifiers.append("⌃") }
+            var step = MacroStep(kind: .keyShortcut)
+            step.value = (modifiers + [keyNameForCode(keyCode)]).joined(separator: "+")
+            recordedSteps.append(step)
+        } else {
+            // Plain typing (including Shift for capitals/symbols) is coalesced into one step.
+            let chars = typedString(for: event)
+            guard !chars.isEmpty else { return }
+            if let lastIndex = recordedSteps.indices.last,
+               recordedSteps[lastIndex].kind == .typeText {
+                recordedSteps[lastIndex].value += chars
+            } else {
+                var step = MacroStep(kind: .typeText)
+                step.value = chars
+                recordedSteps.append(step)
+            }
+        }
+    }
+
+    private func handleScroll(_ event: CGEvent) {
+        let deltaY = event.getIntegerValueField(.scrollWheelEventDeltaAxis1)
+        let deltaX = event.getIntegerValueField(.scrollWheelEventDeltaAxis2)
+
+        let direction: ScrollDirection
+        let amount: Double
+
+        if abs(deltaY) >= abs(deltaX) {
+            direction = deltaY > 0 ? .up : .down
+            amount = Double(abs(deltaY))
+        } else {
+            direction = deltaX > 0 ? .left : .right
+            amount = Double(abs(deltaX))
+        }
+
+        guard amount > 0 else { return }
+
+        if let lastIndex = recordedSteps.indices.last,
+           recordedSteps[lastIndex].kind == .scroll,
+           recordedSteps[lastIndex].scrollDirection == direction {
+            recordedSteps[lastIndex].scrollAmount = min(recordedSteps[lastIndex].scrollAmount + amount, 50)
+            recordedSteps[lastIndex].value = recordedSteps[lastIndex].scrollSummary
+        } else {
+            var step = MacroStep(kind: .scroll)
+            step.scrollDirection = direction
+            step.scrollAmount = min(amount, 50)
+            step.scrollMovesMouse = true
+            step.scrollX = event.location.x
+            step.scrollY = event.location.y
+            step.value = step.scrollSummary
+            recordedSteps.append(step)
+        }
+    }
+
+    private func typedString(for event: CGEvent) -> String {
+        var length = 0
+        var chars = [UniChar](repeating: 0, count: 8)
+        event.keyboardGetUnicodeString(maxStringLength: 8, actualStringLength: &length, unicodeString: &chars)
+        guard length > 0 else { return "" }
+        let string = String(utf16CodeUnits: chars, count: length)
+        if string.unicodeScalars.contains(where: { $0.value < 0x20 }) { return "" }
+        return string
     }
 
     private func keyNameForCode(_ keyCode: CGKeyCode) -> String {
@@ -208,18 +232,5 @@ final class ActionRecorder {
             123: "Left", 124: "Right", 125: "Down", 126: "Up",
         ]
         return map[keyCode] ?? "Key\(keyCode)"
-    }
-
-    private func characterForKeyCode(_ keyCode: CGKeyCode) -> String {
-        let map: [CGKeyCode: String] = [
-            0: "a", 1: "s", 2: "d", 3: "f", 4: "h", 5: "g", 6: "z", 7: "x",
-            8: "c", 9: "v", 11: "b", 12: "q", 13: "w", 14: "e", 15: "r",
-            16: "y", 17: "t", 18: "1", 19: "2", 20: "3", 21: "4", 22: "6",
-            23: "5", 24: "=", 25: "9", 26: "7", 27: "-", 28: "8", 29: "0",
-            30: "]", 31: "o", 32: "u", 33: "[", 34: "i", 35: "p",
-            37: "l", 38: "j", 39: "'", 40: "k", 41: ";", 42: "\\", 43: ",",
-            44: "/", 45: "n", 46: "m", 47: ".", 49: " ", 50: "`",
-        ]
-        return map[keyCode] ?? ""
     }
 }

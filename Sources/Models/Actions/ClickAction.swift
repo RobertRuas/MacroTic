@@ -33,6 +33,15 @@ struct ClickAction: MacroAction {
         try? await Task.sleep(for: .milliseconds(60))
         if Task.isCancelled { return false }
 
+        // Post an explicit move at the exact target so the window under the cursor
+        // registers hover before the click — a click on a not-yet-focused window is
+        // otherwise sometimes swallowed as a mere window-raise and never lands.
+        if let settleMove = CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: target, mouseButton: .left) {
+            settleMove.post(tap: .cghidEventTap)
+        }
+        try? await Task.sleep(for: .milliseconds(25))
+        if Task.isCancelled { return false }
+
         guard let downEvent = CGEvent(mouseEventSource: source, mouseType: .leftMouseDown, mouseCursorPosition: target, mouseButton: .left),
               let upEvent = CGEvent(mouseEventSource: source, mouseType: .leftMouseUp, mouseCursorPosition: target, mouseButton: .left)
         else { return false }

@@ -7,6 +7,7 @@ struct MacroListView: View {
     let onStop: () -> Void
     let onEdit: (Macro) -> Void
     let onDelete: (UUID) -> Void
+    var onToggleFavorite: (UUID) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -14,13 +15,6 @@ struct MacroListView: View {
                 emptyState
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))
             } else {
-                let showRecent = !store.recentlyUsed.isEmpty && store.recentlyUsed.count < store.macros.count
-                if showRecent {
-                    recentSection
-                    Divider()
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 4)
-                }
                 allSection
             }
         }
@@ -45,24 +39,10 @@ struct MacroListView: View {
         .padding(.vertical, 40)
     }
 
-    private var recentSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            sectionHeader("Usados Recentemente", icon: "clock.arrow.circlepath")
-            ForEach(store.recentlyUsed) { macro in
-                macroRow(macro)
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .top).combined(with: .opacity),
-                        removal: .move(edge: .leading).combined(with: .opacity)
-                    ))
-            }
-        }
-        .padding(.horizontal, 8)
-    }
-
     private var allSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            sectionHeader("Todas as Macros", icon: "list.bullet")
-            ForEach(store.macros) { macro in
+            sectionHeader("Macros", icon: "list.bullet")
+            ForEach(store.sorted) { macro in
                 macroRow(macro)
                     .transition(.asymmetric(
                         insertion: .move(edge: .top).combined(with: .opacity),
@@ -71,6 +51,7 @@ struct MacroListView: View {
             }
         }
         .padding(.horizontal, 8)
+        .animation(.easeInOut(duration: 0.25), value: store.sorted.map(\.id))
     }
 
     private func macroRow(_ macro: Macro) -> some View {
@@ -80,7 +61,8 @@ struct MacroListView: View {
             onPlay: { onPlay(macro) },
             onStop: { onStop() },
             onEdit: { onEdit(macro) },
-            onDelete: { onDelete(macro.id) }
+            onDelete: { onDelete(macro.id) },
+            onToggleFavorite: { onToggleFavorite(macro.id) }
         )
     }
 

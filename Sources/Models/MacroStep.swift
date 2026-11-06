@@ -145,6 +145,17 @@ struct MacroStep: Identifiable, Hashable, Codable {
     var hasDragCoordinates: Bool {
         dragStartX != 0 || dragStartY != 0 || dragEndX != 0 || dragEndY != 0
     }
+
+    /// Whether this step can be visualized on screen in debug mode (clicks, drags, scroll, window focus).
+    var supportsDebugPreview: Bool {
+        switch kind {
+        case .click: return hasCoordinates
+        case .dragAndDrop: return hasDragCoordinates
+        case .scroll: return true
+        case .launchApp: return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        default: return false
+        }
+    }
 }
 
 extension MacroStep {

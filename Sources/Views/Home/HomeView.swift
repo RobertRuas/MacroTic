@@ -29,7 +29,8 @@ struct HomeView: View {
                     onPlay: { macro in state.playMacro(macro) },
                     onStop: { state.stopMacro() },
                     onEdit: { macro in state.beginEditingMacro(macro) },
-                    onDelete: { id in state.deleteMacro(id) }
+                    onDelete: { id in state.deleteMacro(id) },
+                    onToggleFavorite: { id in state.macroStore.toggleFavorite(id) }
                 )
             }
         }

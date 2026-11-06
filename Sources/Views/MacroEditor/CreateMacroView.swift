@@ -5,12 +5,15 @@ struct CreateMacroView: View {
     let executor: MacroExecutor
     let recorder: ActionRecorder
     let onRun: (Macro) -> Void
+    var onRunFrom: (Int) -> Void = { _ in }
+    var onRunSelected: ([MacroStep]) -> Void = { _ in }
     let onStopRun: () -> Void
     let onToggleRecord: () -> Void
     var isEditing: Bool = false
     var existingNames: [String] = []
     var editingMacroID: UUID? = nil
     let onCancel: () -> Void
+    var onClose: () -> Void = {}
     let onSave: (Macro) -> Void
 
     private var isDuplicateName: Bool {
@@ -22,14 +25,44 @@ struct CreateMacroView: View {
     var body: some View {
         VStack(spacing: 0) {
             identityHeader
+                .disabled(editingLocked)
             executionBar
+                .disabled(editingLocked)
+            if editingLocked {
+                lockedBanner
+            }
             Divider()
             stepsSection
             Divider()
             footer
         }
-        .frame(width: 680, height: 540)
+        .frame(minWidth: 620, idealWidth: 680, maxWidth: .infinity,
+               minHeight: 480, idealHeight: 540, maxHeight: .infinity)
         .background(.background)
+        .background(selectionShortcuts)
+        .onDisappear { DebugPreviewOverlay.shared.hide() }
+    }
+
+    private var selectionShortcuts: some View {
+        VStack {
+            Button("") {
+                withAnimation(.easeInOut(duration: 0.2)) { draft.moveSelectedUp() }
+            }
+            .keyboardShortcut(.upArrow, modifiers: .command)
+
+            Button("") {
+                withAnimation(.easeInOut(duration: 0.2)) { draft.moveSelectedDown() }
+            }
+            .keyboardShortcut(.downArrow, modifiers: .command)
+
+            Button("") {
+                withAnimation(.easeInOut(duration: 0.18)) { draft.removeSelected() }
+            }
+            .keyboardShortcut(.delete, modifiers: .command)
+        }
+        .opacity(0)
+        .frame(width: 0, height: 0)
+        .disabled(draft.selectedStepIDs.isEmpty || editingLocked)
     }
 
     private var identityHeader: some View {
@@ -168,21 +201,208 @@ struct CreateMacroView: View {
                     .background(.quaternary, in: Capsule())
                     .foregroundStyle(.secondary)
                 Spacer()
+                headerToggle(
+                    icon: editingLocked ? "lock.fill" : "lock.open",
+                    active: editingLocked,
+                    tint: .orange,
+                    help: draft.isLocked
+                        ? "Edição bloqueada (segurança) — clique para desbloquear"
+                        : "Bloquear edição das ações (trava automaticamente durante a execução)"
+                ) {
+                    draft.isLocked.toggle()
+                }
+                .disabled(executor.isRunning)
+                headerToggle(
+                    icon: "square.grid.2x2",
+                    active: draft.showQuickBar,
+                    help: "Mostrar/ocultar a barra de ações"
+                ) {
+                    withAnimation(.easeInOut(duration: 0.2)) { draft.showQuickBar.toggle() }
+                }
+                headerToggle(
+                    icon: "ladybug",
+                    active: draft.debugMode,
+                    help: "Modo depuração: passe o mouse sobre uma ação de clique, arrasto, scroll ou janela para ver uma prévia na tela"
+                ) {
+                    draft.debugMode.toggle()
+                    if !draft.debugMode { DebugPreviewOverlay.shared.hide() }
+                }
                 recordButton
+                    .disabled(editingLocked)
                 addMenu
+                    .disabled(editingLocked)
+                ioMenu
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
+
+            if draft.showQuickBar {
+                quickBar
+                    .disabled(editingLocked)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+
+            if !draft.selectedStepIDs.isEmpty {
+                selectionBar
+            }
 
             Divider()
 
             if draft.steps.isEmpty {
                 emptyState
             } else {
+                tableHeader
+                Divider()
                 stepList
             }
         }
         .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    private func headerToggle(icon: String, active: Bool, tint: Color = .accentColor, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(active ? AnyShapeStyle(tint) : AnyShapeStyle(.secondary))
+                .frame(width: 26, height: 22)
+                .background(active ? tint.opacity(0.16) : .clear, in: RoundedRectangle(cornerRadius: 6))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+    }
+
+    /// Editing is blocked either when the user locked it, or automatically while the macro runs.
+    private var editingLocked: Bool { draft.isLocked || executor.isRunning }
+
+    private var lockedBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "lock.fill")
+                .foregroundStyle(.orange)
+            Text(executor.isRunning && !draft.isLocked
+                 ? "Edição bloqueada durante a execução"
+                 : "Edição bloqueada por segurança")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+            Spacer()
+            if !executor.isRunning {
+                Button("Desbloquear") { draft.isLocked = false }
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+        .background(.orange.opacity(0.10))
+    }
+
+    private var quickBar: some View {
+        HStack(spacing: 6) {
+            ForEach(MacroStepKind.allCases) { kind in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.22)) { draft.add(kind) }
+                } label: {
+                    Image(systemName: kind.icon)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 32, height: 26)
+                        .background(kind.tint, in: RoundedRectangle(cornerRadius: 7))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(kind.title)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+        .background(.quaternary.opacity(0.18))
+    }
+
+    private var selectionBar: some View {
+        HStack(spacing: 10) {
+            Text("\(draft.selectedStepIDs.count) selecionada(s)")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            Label("⌘↑/⌘↓ mover · ⌘⌫ excluir", systemImage: "keyboard")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+
+            Button {
+                onRunSelected(draft.selectedStepsInOrder())
+            } label: {
+                Label("Executar", systemImage: "play.fill")
+                    .font(.caption)
+            }
+            .buttonStyle(.borderless)
+            .tint(.green)
+            .disabled(executor.isRunning)
+            .help("Executar apenas as ações selecionadas, na ordem")
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.18)) { draft.removeSelected() }
+            } label: {
+                Label("Excluir", systemImage: "trash")
+                    .font(.caption)
+            }
+            .buttonStyle(.borderless)
+            .tint(.red)
+            .disabled(editingLocked)
+
+            Button("Limpar") {
+                draft.clearSelection()
+            }
+            .buttonStyle(.borderless)
+            .font(.caption)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+        .background(Color.accentColor.opacity(0.08))
+    }
+
+    private var tableHeader: some View {
+        HStack(spacing: StepRowLayout.spacing) {
+            Button(action: toggleSelectAll) {
+                Image(systemName: draft.allSelected ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 14))
+                    .foregroundStyle(draft.allSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.tertiary))
+                    .frame(width: StepRowLayout.selector, height: 20)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Selecionar todas")
+
+            Color.clear.frame(width: StepRowLayout.handle, height: 1)
+
+            Text("#")
+                .frame(width: StepRowLayout.index, alignment: .trailing)
+
+            Color.clear.frame(width: StepRowLayout.icon, height: 1)
+
+            Text("Ação")
+                .frame(width: StepRowLayout.title, alignment: .leading)
+
+            Text("Configuração")
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text("")
+                .frame(width: 78, alignment: .trailing)
+        }
+        .font(.caption2.weight(.semibold))
+        .foregroundStyle(.tertiary)
+        .textCase(.uppercase)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 5)
+        .background(.quaternary.opacity(0.25))
+    }
+
+    private func toggleSelectAll() {
+        withAnimation(.easeInOut(duration: 0.15)) {
+            if draft.allSelected { draft.clearSelection() } else { draft.selectAll() }
+        }
     }
 
     private var stepList: some View {
@@ -193,6 +413,15 @@ struct CreateMacroView: View {
                         step: stepBinding(pair.element),
                         position: pair.offset,
                         total: draft.steps.count,
+                        isSelected: draft.selectedStepIDs.contains(pair.element.id),
+                        debugMode: draft.debugMode,
+                        locked: editingLocked,
+                        onSelect: {
+                            withAnimation(.easeInOut(duration: 0.12)) {
+                                draft.toggleSelection(pair.element.id)
+                            }
+                        },
+                        onRunFrom: { onRunFrom(pair.offset) },
                         onReorder: { draggedID in
                             draft.dropTargetID = nil
                             withAnimation(.spring(duration: 0.35, bounce: 0.2)) {
@@ -232,12 +461,10 @@ struct CreateMacroView: View {
 
                     if pair.offset < draft.steps.count - 1 {
                         Divider()
-                            .opacity(0.4)
-                            .padding(.leading, 60)
+                            .opacity(0.3)
                     }
                 }
             }
-            .padding(.vertical, 2)
             .padding(.bottom, 16)
         }
     }
@@ -276,6 +503,33 @@ struct CreateMacroView: View {
         .fixedSize()
     }
 
+    private var ioMenu: some View {
+        Menu {
+            Button {
+                MacroIO.importMacro { macro in
+                    withAnimation(.easeInOut(duration: 0.22)) { draft.loadFrom(macro) }
+                }
+            } label: {
+                Label("Importar macro…", systemImage: "square.and.arrow.down")
+            }
+            .disabled(editingLocked)
+
+            Button {
+                MacroIO.export(draft.makeMacro())
+            } label: {
+                Label("Exportar macro…", systemImage: "square.and.arrow.up")
+            }
+            .disabled(draft.steps.isEmpty)
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(.caption)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Importar ou exportar esta macro")
+    }
+
     private var emptyState: some View {
         VStack(spacing: 8) {
             Image(systemName: "wand.and.stars")
@@ -309,18 +563,27 @@ struct CreateMacroView: View {
                 }
                 .tint(.green)
                 .disabled(draft.steps.isEmpty)
+                .keyboardShortcut("r", modifiers: .command)
+                .help("Executar a macro (⌘R)")
             }
 
             Spacer()
 
             Button("Cancelar", action: onCancel)
                 .keyboardShortcut(.cancelAction)
-            Button(isEditing ? "Salvar Alterações" : "Salvar") {
+                .help("Descartar e fechar")
+
+            Button("Salvar Alterações") {
                 onSave(draft.makeMacro())
             }
-            .keyboardShortcut(.defaultAction)
-            .buttonStyle(.borderedProminent)
+            .keyboardShortcut("s", modifiers: .command)
             .disabled(!draft.isValid || isDuplicateName)
+            .help("Salvar sem fechar (⌘S)")
+
+            Button("Fechar", action: onClose)
+                .keyboardShortcut("w", modifiers: .command)
+                .buttonStyle(.borderedProminent)
+                .help("Fechar o editor (⌘W)")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)

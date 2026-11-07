@@ -1,3 +1,4 @@
+import AppKit
 import ApplicationServices
 import SwiftUI
 
@@ -56,6 +57,15 @@ final class AppState {
     }
 
     func deleteMacro(_ id: UUID) {
+        let name = macroStore.macros.first(where: { $0.id == id })?.name ?? ""
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = name.isEmpty ? "Apagar esta macro?" : "Apagar a macro \u{201C}\(name)\u{201D}?"
+        alert.informativeText = "Esta ação não pode ser desfeita."
+        alert.addButton(withTitle: "Cancelar")
+        let deleteButton = alert.addButton(withTitle: "Apagar")
+        deleteButton.hasDestructiveAction = true
+        guard alert.runModal() == .alertSecondButtonReturn else { return }
         withAnimation(.easeInOut(duration: 0.25)) {
             macroStore.delete(id)
         }

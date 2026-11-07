@@ -67,14 +67,22 @@ final class MacroStore {
         try? Self.encoder.encode(macros)
     }
 
-    func importJSON(from data: Data) throws {
-        let imported = try Self.decoder.decode([Macro].self, from: data)
-        for macro in imported {
-            if !macros.contains(where: { $0.id == macro.id }) {
+    /// Imports macros, skipping any whose id already exists. Returns how many were added and skipped.
+    @discardableResult
+    func importJSON(from data: Data) throws -> (imported: Int, skipped: Int) {
+        let incoming = try Self.decoder.decode([Macro].self, from: data)
+        var imported = 0
+        var skipped = 0
+        for macro in incoming {
+            if macros.contains(where: { $0.id == macro.id }) {
+                skipped += 1
+            } else {
                 macros.append(macro)
+                imported += 1
             }
         }
         persist()
+        return (imported, skipped)
     }
 
     func exportURL() -> URL? {
@@ -89,7 +97,18 @@ final class MacroStore {
     private func load() {
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
         guard let data = try? Data(contentsOf: fileURL) else { return }
-        macros = (try? Self.decoder.decode([Macro].self, from: data)) ?? []
+        do {
+            macros = try Self.decoder.decode([Macro].self, from: data)
+        } catch {
+            // The file exists but could not be decoded. Preserve it before any later save()
+            // overwrites it, so the user's macros stay recoverable instead of being silently lost.
+            macros = []
+            guard !data.isEmpty else { return }
+            let backupURL = fileURL.deletingLastPathComponent()
+                .appendingPathComponent("macros.corrupt-\(Int(Date().timeIntervalSince1970)).json")
+            try? data.write(to: backupURL, options: .atomic)
+            AppLog.shared.error("Falha ao ler macros.json (\(error.localizedDescription)). Backup salvo em \(backupURL.lastPathComponent).")
+        }
     }
 
     private func persist() {

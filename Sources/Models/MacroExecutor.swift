@@ -110,15 +110,26 @@ final class MacroExecutor {
             return
         }
 
+        let steps = macro.steps
+        let begin = max(0, min(startAt, steps.count))
+
+        // Validate the steps that will actually run before hiding windows / starting the run,
+        // so an unconfigured step fails fast with a clear message instead of (e.g.) clicking at (0,0).
+        for (index, step) in steps.enumerated() {
+            if index < begin { continue }
+            if let issue = step.configurationIssue {
+                AppLog.shared.error("Passo \(index + 1) não configurado (\(issue)) — execução cancelada (macro \"\(macro.name)\").")
+                state = .error("Passo \(index + 1) não configurado: \(issue)")
+                return
+            }
+        }
+
         shouldStop = false
         isPaused = false
         runningMacroID = macro.id
 
         let originalCursor = CGEvent(source: nil)?.location
         installStopShortcut()
-
-        let steps = macro.steps
-        let begin = max(0, min(startAt, steps.count))
         // A partial run (starting past the first step) is a single pass; a full run honours repeatCount.
         let repetitions = begin > 0 ? 1 : max(1, macro.repeatCount)
         currentRepetition = 1

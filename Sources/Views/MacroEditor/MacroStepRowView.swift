@@ -57,6 +57,13 @@ struct MacroStepRowView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .disabled(locked)
 
+            if let issue = step.wrappedValue.configurationIssue {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.orange)
+                    .help("Passo incompleto: \(issue). Será interrompido ao executar.")
+            }
+
             rowActions
                 .disabled(locked)
         }

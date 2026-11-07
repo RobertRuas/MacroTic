@@ -156,6 +156,27 @@ struct MacroStep: Identifiable, Hashable, Codable {
         default: return false
         }
     }
+
+    /// A human-readable reason this step is not ready to run, or nil when it is fully configured.
+    /// Used to stop a run with a clear message instead of, e.g., silently clicking at (0,0).
+    var configurationIssue: String? {
+        switch kind {
+        case .click:
+            return hasCoordinates ? nil : "clique sem posição capturada"
+        case .dragAndDrop:
+            return hasDragCoordinates ? nil : "arrasto sem trajeto capturado"
+        case .keyShortcut:
+            return value.trimmingCharacters(in: .whitespaces).isEmpty ? "atalho não definido" : nil
+        case .typeText:
+            return value.isEmpty ? "texto vazio" : nil
+        case .launchApp:
+            return value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "janela não selecionada" : nil
+        case .scroll, .delay:
+            return nil
+        }
+    }
+
+    var isConfigured: Bool { configurationIssue == nil }
 }
 
 extension MacroStep {

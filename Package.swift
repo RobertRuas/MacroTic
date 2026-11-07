@@ -24,5 +24,10 @@ let package = Package(
                 ])
             ]
         )
+        // Tests live in Tests/MacroTicTests (MacroLogicTests.swift) but are NOT wired in here:
+        // XCTest requires a full Xcode install, and this machine has only the Command Line Tools
+        // (so `swift test` cannot resolve XCTest). With Xcode installed, re-add:
+        //   .testTarget(name: "MacroTicTests", dependencies: ["MacroTic"],
+        //               path: "Tests/MacroTicTests", swiftSettings: [.swiftLanguageMode(.v5)])
     ]
 )

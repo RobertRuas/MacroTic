@@ -100,6 +100,7 @@ final class MacroExecutor {
         guard !isRunning, !isPausedState else { return }
 
         guard AXIsProcessTrusted() else {
+            AppLog.shared.error("Execução bloqueada: permissão de Acessibilidade não concedida (macro \"\(macro.name)\").")
             state = .error("Permissão de Acessibilidade necessária. Ative o MacroTic em Ajustes do Sistema → Privacidade e Segurança → Acessibilidade.")
             let options = [kAXTrustedCheckOptionPrompt.takeRetainedValue() as String: true] as CFDictionary
             _ = AXIsProcessTrustedWithOptions(options)
@@ -155,6 +156,7 @@ final class MacroExecutor {
                         await MainActor.run {
                             self.removeStopShortcut()
                             self.runningMacroID = nil
+                            AppLog.shared.error("Ação desconhecida no passo \(index + 1): \(step.kind.title) (macro \"\(macro.name)\").")
                             self.state = .error("Ação desconhecida: \(step.kind.title)")
                             self.activateApp()
                         }
@@ -166,6 +168,7 @@ final class MacroExecutor {
                         await MainActor.run {
                             self.removeStopShortcut()
                             self.runningMacroID = nil
+                            AppLog.shared.error("Falha ao executar passo \(index + 1): \(step.kind.title) (macro \"\(macro.name)\").")
                             self.state = .error("Falha ao executar passo \(index + 1): \(step.kind.title)")
                             self.activateApp()
                         }

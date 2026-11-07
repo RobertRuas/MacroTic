@@ -24,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AppLog.shared.bootstrap()
         NSApp.setActivationPolicy(.regular)
         windowController = MainWindowController()
         NSApp.activate(ignoringOtherApps: true)

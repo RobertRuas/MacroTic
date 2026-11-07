@@ -5,6 +5,21 @@ struct HomeView: View {
 
     var body: some View {
         VStack(spacing: 14) {
+            HStack {
+                Text("Suas macros")
+                    .font(.headline)
+                Spacer()
+                Button {
+                    state.selectedSection = .manual
+                } label: {
+                    Image(systemName: "questionmark.circle")
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(IconActionButtonStyle())
+                .help("Manual de instruções")
+            }
+
             ActionsRow(
                 onNewMacro: { state.beginCreatingMacro() },
                 onRecord: {

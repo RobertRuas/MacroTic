@@ -21,6 +21,7 @@ struct MainWindowView: View {
     private var content: some View {
         switch state.selectedSection {
         case .settings: SettingsView(state: state, onClose: { state.selectedSection = .home })
+        case .manual: ManualView(state: state, onClose: { state.selectedSection = .home })
         default: HomeView(state: state)
         }
     }

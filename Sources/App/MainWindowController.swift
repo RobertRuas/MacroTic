@@ -36,6 +36,7 @@ final class MainWindowController: NSObject, NSWindowDelegate, NSToolbarDelegate 
         toolbar.delegate = self
         toolbar.displayMode = .iconOnly
         window.toolbar = toolbar
+        window.delegate = self
         window.center()
         window.makeKeyAndOrderFront(nil)
         observeEditingState()
@@ -118,7 +119,19 @@ final class MainWindowController: NSObject, NSWindowDelegate, NSToolbarDelegate 
             state.closeEditor()
             return false
         }
-        return true
+        // Main window: close normally only from the home screen.
+        // From any other screen (Settings/Manual), confirm before closing the app.
+        if state.selectedSection == .home {
+            return true
+        }
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Fechar o MacroTic?"
+        alert.informativeText = "Você não está na tela inicial. Deseja mesmo fechar o aplicativo?"
+        alert.addButton(withTitle: "Cancelar")
+        let closeButton = alert.addButton(withTitle: "Fechar")
+        closeButton.hasDestructiveAction = true
+        return alert.runModal() == .alertSecondButtonReturn
     }
 
     // MARK: - Execution HUD

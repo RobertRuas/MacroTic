@@ -92,7 +92,8 @@ All Swift source files live under `Sources/`. SPM compiles every `.swift` file a
 ```
 Sources/
 ├── App/
-│   ├── MacroTicApp.swift          ENTRY POINT. @main enum MacroTicApp; AppDelegate creates MainWindowController,
+│   ├── MacroTicApp.swift          ENTRY POINT. @main enum MacroTicApp; AppDelegate calls AppLog.shared.bootstrap() first (starts
+│   │                              file logging + stderr tee), creates MainWindowController,
 │   │                              quits when the last window closes (unless a run is being presented — see above), and calls AXIsProcessTrustedWithOptions (prompt: true)
 │   │                              on launch so macOS registers the app under Accessibility and prompts the user if needed
 │   │                              (required for CGEvent posting in MacroExecutor to actually have any effect).
@@ -108,6 +109,10 @@ Sources/
 │   │                              CreateMacroView; while the editor is open the main window is orderOut'd. windowShouldClose on
 │   │                              the editor is intercepted and routed to state.closeEditor() (clears editingMacroID +
 │   │                              isCreatingMacro, returns false so AppDelegate's "terminate on last window closed" never fires).
+│   │                              The MAIN window is also its delegate (window.delegate = self): its windowShouldClose closes
+│   │                              normally only when selectedSection == .home; from any other screen (Settings/Manual) it runs a
+│   │                              confirmation NSAlert ("Fechar o MacroTic?", Cancelar is default, Fechar is destructive) and only
+│   │                              closes if the user confirms, so leaving a sub-screen open doesn't quit the app by accident.
 │   │                              Also observes state.macroExecutor.isRunning (second withObservationTracking loop): while a macro
 │   │                              runs it shows a floating, non-activating borderless NSPanel HUD in the top-right corner (hosts
 │   │                              ExecutionHUDView: live step/repetition progress + Parar button + ⌘Esc hint) and THEN orderOut's
@@ -141,7 +146,7 @@ Sources/
 │                                  bar. Fade-in on show(), fade-out on close(). setStatus/setIndeterminate/setProgress drive it; owned
 │                                  and sequenced entirely by SilentUpdateUserDriver. Ported from the FastReport app's update UI.
 ├── Models/
-│   ├── AppSection.swift           Section identifiers (enum: home, settings — id, title, icon), used by state.selectedSection.
+│   ├── AppSection.swift           Section identifiers (enum: home, settings, manual — id, title, icon), used by state.selectedSection.
 │   ├── AppState.swift             @Observable: selectedSection, updater, isCreatingMacro flag + macroDraft + editingMacroID, macroStore, macroExecutor, actionRecorder. Methods: beginCreatingMacro(), beginEditingMacro(), saveMacro() (persists create-vs-edit but does NOT close the editor — on first save of a new macro it adopts the saved id as editingMacroID so repeated "Salvar Alterações" updates instead of duplicating; on edit it preserves the original's isFavorite since that is set from Home, not the editor), closeEditor() (clears editingMacroID + isCreatingMacro — used by Cancelar/Fechar and the window close button), deleteMacro() (animated), playMacro() (ignores a second play while already running and only marks the macro as used when Accessibility is granted, so counts/"recently used" don't inflate on a blocked run), stopMacro(), startRecording(), stopRecording(), toggleEditorRecording() (in-editor record: starts recorder, on stop appends captured steps to the current draft).
 │   ├── Macro.swift                Domain model (struct, Codable): id, name, details, iconName, steps:[MacroStep], intervalBetweenSteps (default 0.5s), repeatCount (default 1, executor repeats the whole sequence), createdAt, lastUsedAt, executionCount, isFavorite, isLocked (both decodeIfPresent default false). isLocked = the editor's safety lock, persisted so a macro saved locked reopens locked. Provides createdAtLabel (dd/MM/yyyy HH:mm) and lastUsedLabel computed properties. Backwards-compatible Codable (decodeIfPresent for intervalBetweenSteps).
 │   ├── MacroExecutor.swift        @Observable orchestrator. Delegates each step to the matching MacroAction from Actions/. Tracks runningMacroID (the id of the macro currently executing, nil when idle/finished/error/stopped) so the macro list highlights only the running row, not every row. Before running, checks AXIsProcessTrusted() and, if not granted, sets state to .error with an instructional message, re-prompts via AXIsProcessTrustedWithOptions, and opens System Settings → Accessibility (CGEvent posting is silently a no-op without this permission). Runs on Task.detached (background), updates state on MainActor. Repeats the full captured step sequence macro.repeatCount times, waiting intervalBetweenSteps between every step (including across the rep boundary). It does NOT refocus MacroTic between repetitions — the app stays hidden for the whole run (MainWindowController hides the windows + shows the HUD) and only comes back at the very end. execute(_:startAt:) can start a run partway through the sequence (used by the editor's "Executar a partir daqui"): startAt>0 runs a single pass from that step to the end, startAt==0 honours repeatCount. Tracks state (idle/running/paused/finished/error). Restores the cursor to its original position when the macro ends/stops. On finish/error/stop calls activateApp() to bring MacroTic's window back to the front. stop() cancels currentTask; actions cooperatively check Task.isCancelled inside their own per-frame loops (not just between steps) so ⌘Esc actually interrupts mid-action instead of waiting for a long click/drag/scroll/type to finish. The ⌘Esc cancel shortcut is a session-level CGEvent tap (.cgSessionEventTap, headInsert, defaultTap — swallows the matched ⌘Esc) installed while running, NOT an NSEvent global/local monitor: NSEvent global keyDown monitoring needs the separate Input Monitoring permission (the app only has Accessibility) and during a run MacroTic is backgrounded so the local monitor never fires — the CGEvent tap is gated by Accessibility (same as ActionRecorder) and fires regardless of which app is frontmost. Re-enables itself on tapDisabledByTimeout/UserInput. Methods: execute(), pause(), resume(), stop().
@@ -163,7 +168,7 @@ Sources/
 │   ├── MacroStepKind.swift        Step types (enum: keyShortcut, typeText, click, delay, launchApp, dragAndDrop, scroll; openURL was removed — legacy steps are dropped on load via Macro's lossy decode). Each provides title, icon, tint color, placeholder, and boolean flags: usesDelay, usesCoordinates, usesDragCoordinates, usesScroll, usesShortcutRecorder, usesWindowPicker, usesTextField.
 │   └── MacroDraft.swift           @Observable editor/form state for building a macro: name, details, iconName, steps, intervalBetweenSteps, repeatCount, dropTargetID, debugMode (hover previews), showQuickBar (icon action toolbar visible), isLocked (safety lock, persisted via Macro.isLocked), selectedStepIDs:Set<UUID> (multi-selection of rows for ⌘↑/⌘↓ reorder and ⌘⌫ delete) + add/remove/moveUp/moveDown/move(before:) and selection ops: toggleSelection, allSelected, selectAll, clearSelection, removeSelected, and block-aware moveSelectedUp/moveSelectedDown (shift each contiguous selected block by one, preserving multi-row selections). isValid, loadFrom(Macro), makeMacro(), makeMacro(preservingID:). remove() also drops the id from selectedStepIDs. duplicate() copies the full MacroStep via MacroStep.copyWithNewID(). Retained on AppState so edits survive view re-renders.
 └── Views/
-    ├── MainWindowView.swift       Wraps everything in a GeometryReader: content above + StatusBarView below showing the current window size ("W × H px", includes safe-area insets so it equals the window content size). No sidebar — content switches directly on state.selectedSection: SettingsView for .settings, HomeView(state:) otherwise. The toolbar gear button that drives selectedSection lives in MainWindowController (native NSToolbar).
+    ├── MainWindowView.swift       Wraps everything in a GeometryReader: content above + StatusBarView below showing the current window size ("W × H px", includes safe-area insets so it equals the window content size). No sidebar — content switches directly on state.selectedSection: SettingsView for .settings, ManualView for .manual (both passed onClose that sets selectedSection back to .home), HomeView(state:) otherwise. The toolbar gear button that drives selectedSection lives in MainWindowController (native NSToolbar).
     ├── ExecutionHUDView.swift     Small floating progress HUD shown (in a top-right non-activating NSPanel created by MainWindowController) while a macro runs and the app's windows are hidden: spinner + "Executando macro" + live "Rep x/y · passo n/N" status (reads MacroExecutor.state/currentRepetition/totalRepetitions) + red "Parar" button (→ state.stopMacro()) + ⌘Esc hint. Fixed 320pt width, material capsule card.
     ├── Components/
     │   ├── StatusBarView.swift  Classic bottom status bar. StatusBarView { content } = top divider + 22pt bar (.bar material, 11pt secondary text); StatusBarItem(icon:, text) = one cell with a trailing vertical divider. Add more cells inside the StatusBarView closure in MainWindowView.
@@ -177,11 +182,22 @@ Sources/
     │   ├── AutoFocusTextField.swift   NSTextField bridge that takes focus when StepFocusRequest.pendingStepID matches (set when a typeText step is added).
     │   ├── ShortcutCapturePicker.swift  Floating HUD that captures ANY key combo (active CGEvent tap swallows the keys so ⌘Q/⌘W etc. don't hit the app; falls back to NSEvent local monitor without permission). Shows live modifiers. Opened automatically when a .keyShortcut step is added, or via Capturar/Recapturar button.
     ├── Home/
-    │   ├── HomeView.swift             HOME SCREEN. Takes AppState. Composes ActionsRow (top) + execution banner (when running) + MacroListView (bottom). The macro editor is presented in a separate window by MainWindowController (not a sheet here). Wires both action cards: Nova Macro, Gravar Ações.
+    │   ├── HomeView.swift             HOME SCREEN. Takes AppState. Header row ("Suas macros" title + a questionmark.circle help button that opens the manual via state.selectedSection = .manual) + ActionsRow + execution banner (when running) + MacroListView (bottom). The macro editor is presented in a separate window by MainWindowController (not a sheet here). Wires both action cards: Nova Macro, Gravar Ações.
     │   ├── StatsCardView.swift        ActionCardView component: clickable card with icon, title, color, optional isActive state (pulse animation + tinted background). Used by ActionsRow.
     │   ├── StatsCardsRow.swift        ActionsRow: horizontal row of ActionCardView cards: Nova Macro (opens the editor) and Gravar Ações (starts/stops recording — stop opens the editor with a new draft from the recording). Shows active state while recording.
     │   ├── MacroListView.swift        Takes MacroStore + MacroExecutor. A single "Macros" section listing store.sorted (favorites first), no duplicates and no separate recents section. Each row has a favorite star + play/stop/edit/delete buttons. onToggleFavorite wired to store.toggleFavorite. Animated insert/remove/reorder transitions.
     │   └── MacroRowView.swift         Single macro row: leading favorite star toggle (onToggleFavorite), icon, name, details, executionCount + lastUsedLabel, step count badge, play/stop/edit/delete inline buttons. Context menu: Executar, Editar, Favoritar/Remover dos favoritos, Apagar.
+    ├── Manual/
+    │   └── ManualView.swift       INSTRUCTION MANUAL SCREEN (Apple-style). Takes AppState + an onClose closure (MainWindowView
+    │                              passes { state.selectedSection = .home }; opened from HomeView's help button). Own header toolbar
+    │                              ("Manual de Instruções" + xmark close) over a scrollable, document-style guide: a hero (app icon,
+    │                              title, tagline, version pill) followed by numbered sections — o que é, Acessibilidade, tela inicial,
+    │                              criar macro, catálogo de ações (rendered from MacroStepKind.allCases so icons/tints/titles stay in
+    │                              sync with the real step types), gravar ações, ajustes, executar (⌘Esc stop callout with key caps),
+    │                              favoritos, edição avançada, atualizações, solução de problemas (FAQ) and a footer with a
+    │                              FeedbackMailer button. Pure static layout (no @State — SwiftUIMacros unavailable); all building
+    │                              blocks (ManualSection, ManualBullet, ActionCatalogRow, NumberedSteps, Callout, StopCallout, KeyCap,
+    │                              FAQRow) are private helper views in the same file.
     └── Settings/
         └── SettingsView.swift     SETTINGS SCREEN (ported to match the FastReport app's layout). Takes an onClose closure
                                     (MainWindowView passes { state.selectedSection = .home }). Own header toolbar with
@@ -198,9 +214,19 @@ Sources/
 
 ```
 Sources/Services/
-└── FeedbackMailer.swift          Opens the default mail client (mailto:) pre-filled with a feedback subject/body stamped with the
-                                  app version, addressed to 92ruas@gmail.com. Used by SettingsView's Créditos section. Ported from
-                                  the FastReport app.
+├── AppLog.swift                  Persistent logger. Writes to ~/Library/Logs/MacroTic/MacroTic.log, tees stderr into the same file
+│                                  (dup2 a pipe onto STDERR_FILENO, echoing back to the real stderr) so NSLog/print + system error
+│                                  messages are captured, and trims the file to the last ~256 KB on a line boundary. bootstrap() is
+│                                  called once from AppDelegate.applicationDidFinishLaunching (writes a session header + starts the
+│                                  tee). Public: log()/error(), logFileURL (what FeedbackMailer attaches), recentText(maxBytes:) (tail
+│                                  as text, for the mailto fallback body). MacroExecutor calls AppLog.shared.error(...) at its three
+│                                  failure points (Accessibility denied, unknown action, failed step). Single serial queue for all I/O.
+└── FeedbackMailer.swift          compose() opens a feedback e-mail to 92ruas@gmail.com (subject/body stamped with the app version),
+                                  ALWAYS including the latest error logs. Primary path: NSSharingService(.composeEmail) with the log
+                                  file (AppLog.logFileURL) as a real ATTACHMENT, via the user's default mail client. Fallback when that
+                                  can't perform (no mail account): mailto: with the recent log tail embedded inline in the body (mailto
+                                  can't attach files). Used by SettingsView's Créditos section and ManualView's footer. Ported from the
+                                  FastReport app and extended with the log attachment.
 ```
 
 ## Key Architecture Decisions

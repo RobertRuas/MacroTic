@@ -2,9 +2,9 @@ import AppKit
 import SwiftUI
 
 /// Shows a small "Novidades" window with the release notes the first time the app
-/// launches on a new version (i.e. right after an auto-update). Notes are fetched from
-/// the matching GitHub Release for the current version; a generic message is shown if
-/// they can't be fetched. Does nothing on a genuinely fresh first install.
+/// launches on a new version (i.e. right after an auto-update). Notes come from the
+/// bundled `ReleaseNotes` list — nothing is fetched and no external service is referenced.
+/// Does nothing on a genuinely fresh first install.
 enum WhatsNew {
     private static let defaultsKey = "whatsNewLastVersion"
     private static var window: NSWindow?
@@ -37,9 +37,7 @@ enum WhatsNew {
         guard isUpgrade else { return }
 
         AppLog.shared.log("Primeira execução da versão \(version) — exibindo novidades.")
-        fetchNotes(for: version) { notes, url in
-            present(version: version, notes: notes, url: url)
-        }
+        present(version: version, notes: ReleaseNotes.notes(for: version))
     }
 
     private static var hasExistingLibrary: Bool {
@@ -47,50 +45,11 @@ enum WhatsNew {
         return FileManager.default.fileExists(atPath: dir.appendingPathComponent("MacroTic/macros.json").path)
     }
 
-    // MARK: - Fetch
-
-    private static func ownerRepo() -> (owner: String, repo: String)? {
-        guard let feed = Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String,
-              let url = URL(string: feed) else { return nil }
-        // https://github.com/<owner>/<repo>/releases/latest/download/appcast.xml
-        let parts = url.pathComponents.filter { $0 != "/" }
-        guard parts.count >= 2 else { return nil }
-        return (parts[0], parts[1])
-    }
-
-    private static func fetchNotes(for version: String, completion: @escaping (String?, URL?) -> Void) {
-        guard let (owner, repo) = ownerRepo(),
-              let api = URL(string: "https://api.github.com/repos/\(owner)/\(repo)/releases/tags/v\(version)") else {
-            DispatchQueue.main.async { completion(nil, nil) }
-            return
-        }
-        var request = URLRequest(url: api)
-        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        request.setValue("MacroTic", forHTTPHeaderField: "User-Agent")
-        request.timeoutInterval = 8
-
-        URLSession.shared.dataTask(with: request) { data, _, _ in
-            var notes: String?
-            var htmlURL: URL?
-            if let data,
-               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                let body = (object["body"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-                notes = (body?.isEmpty == false) ? body : nil
-                if let link = object["html_url"] as? String { htmlURL = URL(string: link) }
-            }
-            DispatchQueue.main.async { completion(notes, htmlURL) }
-        }.resume()
-    }
-
-    // MARK: - Present
-
-    private static func present(version: String, notes: String?, url: URL?) {
-        let fallback = "Você atualizou para a versão \(version).\n\nObrigado por usar o MacroTic!"
+    private static func present(version: String, notes: [String]?) {
         let hosting = NSHostingController(
             rootView: WhatsNewView(
                 version: version,
-                notes: notes ?? fallback,
-                githubURL: url,
+                notes: notes ?? [],
                 onClose: { window?.close(); window = nil }
             )
         )
@@ -112,25 +71,35 @@ enum WhatsNew {
 
 private struct WhatsNewView: View {
     let version: String
-    let notes: String
-    var githubURL: URL?
+    let notes: [String]
     let onClose: () -> Void
-
-    private var lines: [String] { notes.components(separatedBy: "\n") }
 
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider()
             ScrollView {
-                VStack(alignment: .leading, spacing: 7) {
-                    ForEach(Array(lines.enumerated()), id: \.offset) { pair in
-                        lineView(pair.element)
+                VStack(alignment: .leading, spacing: 12) {
+                    if notes.isEmpty {
+                        Text("Você atualizou para a versão \(version).")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(Array(notes.enumerated()), id: \.offset) { pair in
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: "sparkles")
+                                    .foregroundStyle(.tint)
+                                    .font(.callout)
+                                Text(pair.element)
+                                    .font(.callout)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Spacer(minLength: 0)
+                            }
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 22)
-                .padding(.vertical, 18)
+                .padding(22)
             }
             Divider()
             footer
@@ -158,46 +127,8 @@ private struct WhatsNewView: View {
         .padding(.bottom, 14)
     }
 
-    @ViewBuilder
-    private func lineView(_ raw: String) -> some View {
-        let trimmed = raw.trimmingCharacters(in: .whitespaces)
-        if trimmed.isEmpty {
-            Spacer().frame(height: 3)
-        } else if trimmed.hasPrefix("## ") || trimmed.hasPrefix("# ") {
-            Text(trimmed.replacingOccurrences(of: "#", with: "").trimmingCharacters(in: .whitespaces))
-                .font(.headline)
-                .padding(.top, 4)
-        } else if trimmed.hasPrefix("* ") || trimmed.hasPrefix("- ") {
-            HStack(alignment: .top, spacing: 7) {
-                Text("•").foregroundStyle(.secondary)
-                Text(inlineMarkdown(String(trimmed.dropFirst(2))))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-        } else {
-            Text(inlineMarkdown(trimmed))
-                .font(.callout)
-                .foregroundStyle(.primary)
-        }
-    }
-
-    private func inlineMarkdown(_ string: String) -> AttributedString {
-        (try? AttributedString(
-            markdown: string,
-            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        )) ?? AttributedString(string)
-    }
-
     private var footer: some View {
         HStack {
-            if let githubURL {
-                Button {
-                    NSWorkspace.shared.open(githubURL)
-                } label: {
-                    Label("Ver no GitHub", systemImage: "arrow.up.right.square")
-                }
-                .buttonStyle(.link)
-            }
             Spacer()
             Button("Fechar", action: onClose)
                 .keyboardShortcut(.defaultAction)

@@ -144,6 +144,15 @@ Sources/
 │   │                              (download mapped to 0–0.9, extraction 0.9–1.0) and a 5s minimum visible duration before relaunch. A
 │   │                              user-initiated check with no update shows a plain NSAlert instead of the panel; errors on startup just
 │   │                              dismiss the panel silently, errors on a user check show an alert.
+│   ├── WhatsNewController.swift   "Novidades" window shown the first time the app launches on a NEW version (i.e. right after an
+│   │                              auto-update). enum WhatsNew.presentIfNeeded() is called from AppDelegate.applicationDidFinishLaunching.
+│   │                              Packaged .app only. Tracks the last-shown version in UserDefaults("whatsNewLastVersion"): shows when
+│   │                              it differs from the current CFBundleShortVersionString; on a nil record it shows only if macros.json
+│   │                              already exists (upgrade from a pre-feature version), never on a genuinely fresh install. Fetches the
+│   │                              release notes from the matching GitHub Release (GET api.github.com/repos/<owner>/<repo>/releases/tags/
+│   │                              v<version>; owner/repo derived from Info.plist SUFeedURL; User-Agent "MacroTic"), with a generic
+│   │                              fallback message if offline/not found. Renders them (light inline-markdown per line) in a small titled
+│   │                              NSWindow (private WhatsNewView) with a "Ver no GitHub" link and a Fechar button.
 │   └── UpdateProgressWindow.swift  The "janelinha": a borderless, floating, non-activating NSPanel (320×148, HUD-material rounded
 │                                  NSVisualEffectView) centered on screen with the app icon, a status label, and an NSProgressIndicator
 │                                  bar. Fade-in on show(), fade-out on close(). setStatus/setIndeterminate/setProgress drive it; owned

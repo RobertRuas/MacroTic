@@ -29,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         windowController = MainWindowController()
         NSApp.activate(ignoringOtherApps: true)
         requestAccessibilityPermissionIfNeeded()
+        WhatsNew.presentIfNeeded()
     }
 
     private func requestAccessibilityPermissionIfNeeded() {

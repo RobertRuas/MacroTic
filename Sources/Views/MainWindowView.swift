@@ -20,7 +20,7 @@ struct MainWindowView: View {
     @ViewBuilder
     private var content: some View {
         switch state.selectedSection {
-        case .settings: SettingsView(state: state)
+        case .settings: SettingsView(state: state, onClose: { state.selectedSection = .home })
         default: HomeView(state: state)
         }
     }

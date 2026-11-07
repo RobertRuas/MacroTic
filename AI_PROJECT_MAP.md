@@ -183,7 +183,24 @@ Sources/
     │   ├── MacroListView.swift        Takes MacroStore + MacroExecutor. A single "Macros" section listing store.sorted (favorites first), no duplicates and no separate recents section. Each row has a favorite star + play/stop/edit/delete buttons. onToggleFavorite wired to store.toggleFavorite. Animated insert/remove/reorder transitions.
     │   └── MacroRowView.swift         Single macro row: leading favorite star toggle (onToggleFavorite), icon, name, details, executionCount + lastUsedLabel, step count badge, play/stop/edit/delete inline buttons. Context menu: Executar, Editar, Favoritar/Remover dos favoritos, Apagar.
     └── Settings/
-        └── SettingsView.swift     SETTINGS SCREEN. Single "Atualizações" card: current version (CFBundleShortVersionString) + "Verificar atualizações" button (state.updater.checkForUpdates()).
+        └── SettingsView.swift     SETTINGS SCREEN (ported to match the FastReport app's layout). Takes an onClose closure
+                                    (MainWindowView passes { state.selectedSection = .home }). Own header toolbar with
+                                    "Configurações" title + an xmark close button (IconActionButtonStyle). Scrollable body with two
+                                    sections: "Atualizações" card — Versão (CFBundleShortVersionString), "Verificar atualizações"
+                                    button (state.updater.checkForUpdates(), disabled unless canCheckForUpdates), Última verificação
+                                    (updater.lastCheckDate), Verificação automática (automaticallyChecksForUpdates + checkIntervalHours),
+                                    Instalação automática (automaticallyDownloadsUpdates); shows "Disponível apenas no app instalado"
+                                    when not a packaged .app. "Créditos" section — developer name/email (selectable) + a "Enviar feedback"
+                                    button that calls FeedbackMailer.compose().
+```
+
+## Services
+
+```
+Sources/Services/
+└── FeedbackMailer.swift          Opens the default mail client (mailto:) pre-filled with a feedback subject/body stamped with the
+                                  app version, addressed to 92ruas@gmail.com. Used by SettingsView's Créditos section. Ported from
+                                  the FastReport app.
 ```
 
 ## Key Architecture Decisions

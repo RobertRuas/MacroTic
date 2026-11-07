@@ -102,7 +102,8 @@ Sources/
 │   │                              version is always visible. Owns AppState.
 │   │                              Attaches a native NSToolbar (unified style, NSToolbarDelegate on self) with a single
 │   │                              flexible-space + gearshape item that toggles state.selectedSection between .home/.settings
-│   │                              (no sidebar). Observes state.isCreatingMacro via withObservationTracking and swaps to a separate 680x540
+│   │                              (no sidebar). On init it calls state.updater.checkForUpdatesAtStartup() so the little update panel
+│   │                              (UpdateProgressWindow) appears at launch. Observes state.isCreatingMacro via withObservationTracking and swaps to a separate 680x540
 │   │                              editor window (titled "Nova Macro"/"Editar Macro", resizable with min size 620×480, no miniaturize) that hosts
 │   │                              CreateMacroView; while the editor is open the main window is orderOut'd. windowShouldClose on
 │   │                              the editor is intercepted and routed to state.closeEditor() (clears editingMacroID +
@@ -118,14 +119,27 @@ Sources/
 │   │                              goes nil once the app has no key window). On finish/stop it orders the HUD out and restores the
 │   │                              windows it hid. ⌘Esc still cancels because the cancel tap lives in MacroExecutor, independent of
 │   │                              window visibility.
-│   └── UpdaterController.swift    SPARKLE WRAPPER. @Observable class around SPUStandardUpdaterController; starts on init and
-│                                  fires updater.checkForUpdatesInBackground() as soon as canCheckForUpdates becomes true
-│                                  (observed via KVO with the .initial option, guarded by a one-shot didInitialCheck flag) so
-│                                  every launch checks for and silently installs an update, not just on the SUScheduledCheckInterval
-│                                  cadence. Calling checkForUpdatesInBackground() directly in init was dropped because the updater
-│                                  has not finished starting yet (canCheckForUpdates still false) — the KVO gate guarantees it runs
-│                                  the moment the updater is actually ready.
-│                                  Behavior comes from Contents/Info.plist (see Packaging/Info.plist). No-op outside a packaged .app.
+│   ├── UpdaterController.swift    SPARKLE WRAPPER. @Observable class around a bare SPUUpdater (NOT SPUStandardUpdaterController)
+│   │                              wired to the custom SilentUpdateUserDriver, so the whole update flow drives our own little
+│   │                              progress window instead of Sparkle's standard dialogs. start() is called on init (packaged .app
+│   │                              only). Exposes canCheckForUpdates + lastCheckDate (KVO-observed), isAvailable, and read-only
+│   │                              automaticallyChecksForUpdates/automaticallyDownloadsUpdates/checkIntervalHours/feedURLString.
+│   │                              checkForUpdates() = user-initiated (Settings button); checkForUpdatesAtStartup() = the launch
+│   │                              check that shows the panel: it flags the driver (beginStartupCheck) then checks. Called once from
+│   │                              MainWindowController.init. Behavior/feed come from Contents/Info.plist (see Packaging/Info.plist).
+│   │                              No-op outside a packaged .app.
+│   ├── SilentUpdateUserDriver.swift  Custom SPUUserDriver that replaces Sparkle's standard UI. Auto-approves permission, auto-installs
+│   │                              any found update (reply .install), never shows release notes. On the STARTUP check (flagged via
+│   │                              beginStartupCheck) it shows UpdateProgressWindow — "Verificando atualizações…" → if up to date, holds
+│   │                              the panel a minimum ~2s then shows "Você já está na versão mais recente" for ~1.2s and fades out; if an
+│   │                              update is found, swaps to "Baixando…/Instalando…/Reiniciando…" with real download+extraction progress
+│   │                              (download mapped to 0–0.9, extraction 0.9–1.0) and a 5s minimum visible duration before relaunch. A
+│   │                              user-initiated check with no update shows a plain NSAlert instead of the panel; errors on startup just
+│   │                              dismiss the panel silently, errors on a user check show an alert.
+│   └── UpdateProgressWindow.swift  The "janelinha": a borderless, floating, non-activating NSPanel (320×148, HUD-material rounded
+│                                  NSVisualEffectView) centered on screen with the app icon, a status label, and an NSProgressIndicator
+│                                  bar. Fade-in on show(), fade-out on close(). setStatus/setIndeterminate/setProgress drive it; owned
+│                                  and sequenced entirely by SilentUpdateUserDriver. Ported from the FastReport app's update UI.
 ├── Models/
 │   ├── AppSection.swift           Section identifiers (enum: home, settings — id, title, icon), used by state.selectedSection.
 │   ├── AppState.swift             @Observable: selectedSection, updater, isCreatingMacro flag + macroDraft + editingMacroID, macroStore, macroExecutor, actionRecorder. Methods: beginCreatingMacro(), beginEditingMacro(), saveMacro() (persists create-vs-edit but does NOT close the editor — on first save of a new macro it adopts the saved id as editingMacroID so repeated "Salvar Alterações" updates instead of duplicating; on edit it preserves the original's isFavorite since that is set from Home, not the editor), closeEditor() (clears editingMacroID + isCreatingMacro — used by Cancelar/Fechar and the window close button), deleteMacro() (animated), playMacro() (ignores a second play while already running and only marks the macro as used when Accessibility is granted, so counts/"recently used" don't inflate on a blocked run), stopMacro(), startRecording(), stopRecording(), toggleEditorRecording() (in-editor record: starts recorder, on stop appends captured steps to the current draft).

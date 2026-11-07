@@ -4,42 +4,59 @@ import Sparkle
 @Observable
 final class UpdaterController {
     @ObservationIgnored
-    private let standardController: SPUStandardUpdaterController
+    private let updater: SPUUpdater
+
+    @ObservationIgnored
+    private let userDriver = SilentUpdateUserDriver()
 
     @ObservationIgnored
     private var observation: NSKeyValueObservation?
 
     private(set) var canCheckForUpdates = false
+    private(set) var lastCheckDate: Date?
 
     @ObservationIgnored
-    private var didInitialCheck = false
+    private var lastCheckObservation: NSKeyValueObservation?
 
     let isAvailable = Bundle.main.bundleURL.pathExtension == "app"
 
+    var automaticallyChecksForUpdates: Bool { updater.automaticallyChecksForUpdates }
+    var automaticallyDownloadsUpdates: Bool { updater.automaticallyDownloadsUpdates }
+    var checkIntervalHours: Int { Int(updater.updateCheckInterval / 3600) }
+    var feedURLString: String? { updater.feedURL?.absoluteString }
+
     init() {
-        standardController = SPUStandardUpdaterController(
-            startingUpdater: Bundle.main.bundleURL.pathExtension == "app",
-            updaterDelegate: nil,
-            userDriverDelegate: nil
+        updater = SPUUpdater(
+            hostBundle: Bundle.main,
+            applicationBundle: Bundle.main,
+            userDriver: userDriver,
+            delegate: nil
         )
-        canCheckForUpdates = standardController.updater.canCheckForUpdates
-        observation = standardController.updater.observe(\.canCheckForUpdates, options: [.initial, .new]) { [weak self] updater, _ in
+        if isAvailable {
+            try? updater.start()
+        }
+        canCheckForUpdates = updater.canCheckForUpdates
+        lastCheckDate = updater.lastUpdateCheckDate
+        observation = updater.observe(\.canCheckForUpdates, options: [.new]) { [weak self] _, change in
             DispatchQueue.main.async {
-                guard let self = self else { return }
-                self.canCheckForUpdates = updater.canCheckForUpdates
-                self.performInitialCheckIfNeeded()
+                self?.canCheckForUpdates = change.newValue ?? false
+            }
+        }
+        lastCheckObservation = updater.observe(\.lastUpdateCheckDate, options: [.new]) { [weak self] _, change in
+            DispatchQueue.main.async {
+                self?.lastCheckDate = change.newValue ?? nil
             }
         }
     }
 
-    private func performInitialCheckIfNeeded() {
-        guard isAvailable, !didInitialCheck, standardController.updater.canCheckForUpdates else { return }
-        didInitialCheck = true
-        standardController.updater.checkForUpdatesInBackground()
-    }
-
     func checkForUpdates() {
         guard isAvailable else { return }
-        standardController.checkForUpdates(nil)
+        updater.checkForUpdates()
+    }
+
+    func checkForUpdatesAtStartup() {
+        guard isAvailable else { return }
+        userDriver.beginStartupCheck()
+        updater.checkForUpdates()
     }
 }

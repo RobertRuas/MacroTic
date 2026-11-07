@@ -40,6 +40,7 @@ final class MainWindowController: NSObject, NSWindowDelegate, NSToolbarDelegate 
         window.makeKeyAndOrderFront(nil)
         observeEditingState()
         observeRunState()
+        state.updater.checkForUpdatesAtStartup()
     }
 
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier, willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {

@@ -5,6 +5,9 @@ import Foundation
 /// user-facing novelties shown as bullets. Versions without an entry show a generic "atualizado" message.
 enum ReleaseNotes {
     static let byVersion: [String: [String]] = [
+        "0.2.9": [
+            "Arrastar e soltar imagens ficou mais confiável: o clique inicial segura o item por mais tempo e o arrasto começa com um movimento lento e gradual, para o aplicativo realmente levantar a imagem antes de levá-la ao destino.",
+        ],
         "0.2.8": [
             "A telinha de status durante a execução agora é apenas visual: ela deixa passar os cliques e arrastos da macro, então nunca mais atrapalha uma ação que acontece embaixo dela.",
             "Para parar uma macro em execução, use ⌘Esc (indicado na própria telinha).",

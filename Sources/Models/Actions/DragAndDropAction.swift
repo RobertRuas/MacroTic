@@ -2,15 +2,6 @@ import AppKit
 import Foundation
 
 struct DragAndDropAction: MacroAction {
-    // Tunable timings (ms) for picking up and dropping the dragged item.
-    private static let grabHoldMs = 450      // button held perfectly still before ANY movement (the "grab")
-    private static let pickupStepMs = 45     // delay between each tiny pick-up move
-    private static let pickupSettleMs = 120  // after the item has lifted, before travelling to the target
-    private static let dropDwellMs = 160     // held at the destination before releasing
-    private static let afterReleaseMs = 120  // after release, before the next step runs
-    private static let pickupSteps = 6       // number of tiny moves used to arm/lift the drag
-    private static let pickupDistanceMax = 14.0 // how far (px) the slow pick-up travels
-
     func execute(step: MacroStep) async -> Bool {
         let source = CGEventSource(stateID: .hidSystemState)
         let startPoint = CGPoint(x: step.dragStartX, y: step.dragStartY)
@@ -41,51 +32,33 @@ struct DragAndDropAction: MacroAction {
 
         guard let mouseDown = CGEvent(mouseEventSource: source, mouseType: .leftMouseDown, mouseCursorPosition: startPoint, mouseButton: .left) else { return false }
         mouseDown.post(tap: .cghidEventTap)
+        // Hold the press in place so the target under the cursor registers the grab
+        // before any movement — releasing/moving too soon makes the drag silently fail.
+        try? await Task.sleep(for: .milliseconds(220))
 
-        // From here on the button is DOWN: any early exit must still post mouseUp, so track a flag
-        // and fall through to the single release path below instead of returning.
-        var cancelled = false
-
-        // Long "grab" hold: keep the button pressed, perfectly still, long enough for the app to
-        // treat it as picking up the item (image) under the cursor before any movement happens.
-        try? await Task.sleep(for: .milliseconds(Self.grabHoldMs))
-
-        // Slow, deliberate pick-up: cross the drag threshold with several tiny moves so the app
-        // arms the drag and the item actually lifts off, instead of reading it as a plain click.
-        let totalDX = endPoint.x - startPoint.x
-        let totalDY = endPoint.y - startPoint.y
-        let totalLen = max(1, sqrt(totalDX * totalDX + totalDY * totalDY))
-        let pickupDistance = min(Self.pickupDistanceMax, totalLen)
-        let ux = totalDX / totalLen
-        let uy = totalDY / totalLen
-        var liftPoint = startPoint
-        for i in 1...Self.pickupSteps {
-            if Task.isCancelled { cancelled = true; break }
-            let d = pickupDistance * Double(i) / Double(Self.pickupSteps)
-            liftPoint = CGPoint(x: startPoint.x + ux * d, y: startPoint.y + uy * d)
-            if let lift = CGEvent(mouseEventSource: source, mouseType: .leftMouseDragged, mouseCursorPosition: liftPoint, mouseButton: .left) {
-                lift.post(tap: .cghidEventTap)
+        // A tiny initial drag nudge "wakes up" apps that only begin a drag once the
+        // pointer actually moves while the button is down.
+        if !Task.isCancelled {
+            let nudge = CGPoint(x: startPoint.x + 1, y: startPoint.y + 1)
+            if let wake = CGEvent(mouseEventSource: source, mouseType: .leftMouseDragged, mouseCursorPosition: nudge, mouseButton: .left) {
+                wake.post(tap: .cghidEventTap)
             }
-            try? await Task.sleep(for: .milliseconds(Self.pickupStepMs))
+            try? await Task.sleep(for: .milliseconds(90))
         }
 
-        // Let the lifted item settle onto the cursor before travelling to the destination.
-        if !cancelled { try? await Task.sleep(for: .milliseconds(Self.pickupSettleMs)) }
-
         let dragSteps = 30
-        if !cancelled {
-            for i in 1...dragSteps {
-                if Task.isCancelled { cancelled = true; break }
-                let progress = Double(i) / Double(dragSteps)
-                let eased = progress * progress * (3.0 - 2.0 * progress)
-                let currentX = liftPoint.x + (endPoint.x - liftPoint.x) * eased
-                let currentY = liftPoint.y + (endPoint.y - liftPoint.y) * eased
-                let currentPoint = CGPoint(x: currentX, y: currentY)
+        var cancelled = false
+        for i in 1...dragSteps {
+            if Task.isCancelled { cancelled = true; break }
+            let progress = Double(i) / Double(dragSteps)
+            let eased = progress * progress * (3.0 - 2.0 * progress)
+            let currentX = step.dragStartX + (step.dragEndX - step.dragStartX) * eased
+            let currentY = step.dragStartY + (step.dragEndY - step.dragStartY) * eased
+            let currentPoint = CGPoint(x: currentX, y: currentY)
 
-                guard let dragEvent = CGEvent(mouseEventSource: source, mouseType: .leftMouseDragged, mouseCursorPosition: currentPoint, mouseButton: .left) else { break }
-                dragEvent.post(tap: .cghidEventTap)
-                try? await Task.sleep(for: .milliseconds(12))
-            }
+            guard let dragEvent = CGEvent(mouseEventSource: source, mouseType: .leftMouseDragged, mouseCursorPosition: currentPoint, mouseButton: .left) else { break }
+            dragEvent.post(tap: .cghidEventTap)
+            try? await Task.sleep(for: .milliseconds(12))
         }
 
         // Settle exactly on the destination and dwell there before releasing — dropping the
@@ -96,12 +69,12 @@ struct DragAndDropAction: MacroAction {
             }
         }
         // Always release the button pressed above, even if cancelled, to avoid a stuck drag.
-        try? await Task.sleep(for: .milliseconds(Self.dropDwellMs))
+        try? await Task.sleep(for: .milliseconds(160))
         if let mouseUp = CGEvent(mouseEventSource: source, mouseType: .leftMouseUp, mouseCursorPosition: endPoint, mouseButton: .left) {
             mouseUp.post(tap: .cghidEventTap)
         }
         // Don't exit immediately after releasing: let the drop fully commit before the next step.
-        try? await Task.sleep(for: .milliseconds(Self.afterReleaseMs))
+        try? await Task.sleep(for: .milliseconds(120))
         return !cancelled
     }
 }

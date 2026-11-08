@@ -9,7 +9,7 @@
 - **Target**: macOS 26+
 - **Language mode**: Swift 5 (SwiftUIMacros plugin is NOT available — `@State`, `@Binding`, `@Environment` cannot be used)
 - **Observation**: Uses `@Observable` (ObservationMacros IS available). Bindings are created manually via `Binding(get:set:)`.
-- **Dock icon**: `.regular` activation policy. Closing the window quits the app (`applicationShouldTerminateAfterLastWindowClosed`) — EXCEPT while a macro is running: that delegate returns false when `windowController.isPresentingRun` is true, because during a run the app's windows are intentionally ordered out (only the HUD panel stays) and that must not count as "last window closed" and quit the app mid-run (that bug made the whole app, HUD included, vanish on execute).
+- **Dock icon**: `.regular` activation policy. Closing the window quits the app (`applicationShouldTerminateAfterLastWindowClosed`) — EXCEPT while a macro is running: that delegate returns false when `windowController.isPresentingRun` is true, because during a run the app's windows are intentionally ordered out (nothing visible — no HUD) and that must not count as "last window closed" and quit the app mid-run (that bug made the whole app vanish on execute).
 
 ---
 
@@ -117,21 +117,12 @@ Sources/
 │   │                              confirmation NSAlert ("Fechar o MacroTic?", Cancelar is default, Fechar is destructive) and only
 │   │                              closes if the user confirms, so leaving a sub-screen open doesn't quit the app by accident.
 │   │                              Also observes state.macroExecutor.isRunning (second withObservationTracking loop): while a macro
-│   │                              runs it shows a floating, non-activating borderless NSPanel HUD in the top-right corner (hosts
-│   │                              ExecutionHUDView: live step/repetition progress + "⌘Esc para parar" indicator) and THEN orderOut's
-│   │                              every visible non-panel window (the app "disappears"), only hiding them once the HUD is confirmed
-│   │                              on screen. The HUD panel is a NonFocusingHUDPanel (canBecomeKey/canBecomeMain=false,
-│   │                              becomesKeyOnlyIfNeeded) so it never steals keyboard focus from the app being automated, and sets
-│   │                              ignoresMouseEvents=true so it is a purely VISUAL overlay — the macro's own synthetic clicks/drags
-│   │                              (and real user clicks) pass straight through to the app underneath instead of being swallowed when a
-│   │                              coordinate lands under the HUD. Stopping is done only via ⌘Esc (the session event tap in
-│   │                              MacroExecutor), not a button. The panel sets hidesOnDeactivate=false (NSPanel defaults to true — without this the HUD
-│   │                              vanishes the instant the macro gives focus to another app, which looked like a crash) and uses
-│   │                              level .statusBar + canJoinAllSpaces/fullScreenAuxiliary/stationary so it stays visible over the
-│   │                              app being automated, even in fullscreen. The target screen is captured before hiding (NSScreen.main
-│   │                              goes nil once the app has no key window). On finish/stop it orders the HUD out and restores the
-│   │                              windows it hid. ⌘Esc still cancels because the cancel tap lives in MacroExecutor, independent of
-│   │                              window visibility.
+│   │                              runs it orderOut's every visible non-panel window (the app "disappears") so MacroTic's own windows
+│   │                              can't sit on top of, or intercept events meant for, the app being automated. There is NO status HUD
+│   │                              (it was removed — an on-screen overlay could intercept the macro's synthetic clicks/drags). On
+│   │                              finish/stop (endRunPresentation) it restores the windows it hid and reactivates the app. Stopping a
+│   │                              run is done only via ⌘Esc (the session-level cancel event tap lives in MacroExecutor, independent of
+│   │                              window visibility).
 │   ├── UpdaterController.swift    SPARKLE WRAPPER. @Observable class around a bare SPUUpdater (NOT SPUStandardUpdaterController)
 │   │                              wired to the custom SilentUpdateUserDriver, so the whole update flow drives our own little
 │   │                              progress window instead of Sparkle's standard dialogs. start() is called on init (packaged .app
@@ -187,7 +178,6 @@ Sources/
 │   └── MacroDraft.swift           @Observable editor/form state for building a macro: name, details, iconName, steps, intervalBetweenSteps, repeatCount, dropTargetID, debugMode (hover previews), showQuickBar (icon action toolbar visible), isLocked (safety lock, persisted via Macro.isLocked), selectedStepIDs:Set<UUID> (multi-selection of rows for ⌘↑/⌘↓ reorder and ⌘⌫ delete) + add/remove/moveUp/moveDown/move(before:) and selection ops: toggleSelection, allSelected, selectAll, clearSelection, removeSelected, and block-aware moveSelectedUp/moveSelectedDown (shift each contiguous selected block by one, preserving multi-row selections). isValid, loadFrom(Macro), makeMacro(), makeMacro(preservingID:). remove() also drops the id from selectedStepIDs. duplicate() copies the full MacroStep via MacroStep.copyWithNewID(). Retained on AppState so edits survive view re-renders.
 └── Views/
     ├── MainWindowView.swift       Wraps everything in a GeometryReader: content above + StatusBarView below showing the current window size ("W × H px", includes safe-area insets so it equals the window content size). No sidebar — content switches directly on state.selectedSection: SettingsView for .settings, ManualView for .manual (both passed onClose that sets selectedSection back to .home), HomeView(state:) otherwise. The toolbar gear button that drives selectedSection lives in MainWindowController (native NSToolbar).
-    ├── ExecutionHUDView.swift     Small floating progress HUD shown (in a top-right non-activating, non-focusing, click-through NSPanel created by MainWindowController) while a macro runs and the app's windows are hidden: spinner + "Executando macro" + live "Rep x/y · passo n/N" status (reads MacroExecutor.state/currentRepetition/totalRepetitions) + a non-interactive "⌘Esc para parar" red capsule indicator (no button — the panel ignores mouse events so it can't intercept the macro's clicks; stopping is via the ⌘Esc event tap). Fixed 320pt width, material capsule card.
     ├── Components/
     │   ├── StatusBarView.swift  Classic bottom status bar. StatusBarView { content } = top divider + 22pt bar (.bar material, 11pt secondary text); StatusBarItem(icon:, text) = one cell with a trailing vertical divider. Add more cells inside the StatusBarView closure in MainWindowView.
     │   └── IconActionButtonStyle.swift  Reusable ButtonStyle for small icon buttons. Uses configuration.isPressed only (no @State): on press, shrinks (scaleEffect 0.80) and flashes a tinted rounded background (tint param, default .primary). Gives visible click feedback. Applied to MacroRowView play/stop/edit/delete.

@@ -4,11 +4,10 @@ import SwiftUI
 final class MainWindowController: NSObject, NSWindowDelegate, NSToolbarDelegate {
     private let window: NSWindow
     private var editorWindow: NSWindow?
-    private var hudPanel: NSPanel?
     private var windowsHiddenForRun: [NSWindow] = []
     let state = AppState()
 
-    /// True while a macro run is being presented (app windows hidden, HUD shown).
+    /// True while a macro run is being presented (app windows hidden).
     /// Used by AppDelegate so hiding the last window during a run doesn't quit the app.
     var isPresentingRun: Bool { !windowsHiddenForRun.isEmpty }
 
@@ -134,7 +133,7 @@ final class MainWindowController: NSObject, NSWindowDelegate, NSToolbarDelegate 
         return alert.runModal() == .alertSecondButtonReturn
     }
 
-    // MARK: - Execution HUD
+    // MARK: - Execution presentation
 
     private func observeRunState() {
         withObservationTracking { [weak self] in
@@ -158,77 +157,19 @@ final class MainWindowController: NSObject, NSWindowDelegate, NSToolbarDelegate 
     private func beginRunPresentation() {
         guard windowsHiddenForRun.isEmpty else { return }
         DebugPreviewOverlay.shared.hide()
-        // Pick the screen BEFORE hiding windows (NSScreen.main can go nil once the app has no key window).
-        let targetScreen = window.screen ?? editorWindow?.screen ?? NSScreen.main ?? NSScreen.screens.first
-        // Show the HUD first so there is always something visible, then hide the app windows.
-        showHUD(on: targetScreen)
-        // Only hide the app windows if the HUD is really on screen — never leave nothing visible.
-        guard let panel = hudPanel, panel.isVisible else { return }
+        // No status window: just move MacroTic's own windows out of the way so they can't sit on
+        // top of (or intercept events meant for) the app being automated. ⌘Esc stops the run.
         windowsHiddenForRun = NSApp.windows.filter { win in
-            win.isVisible && win !== panel && !(win is NSPanel)
+            win.isVisible && !(win is NSPanel)
         }
         for win in windowsHiddenForRun { win.orderOut(nil) }
     }
 
     private func endRunPresentation() {
-        hudPanel?.orderOut(nil)
         for win in windowsHiddenForRun { win.makeKeyAndOrderFront(nil) }
         windowsHiddenForRun = []
         if !NSApp.isActive { NSApp.activate(ignoringOtherApps: true) }
     }
-
-    private func showHUD(on screen: NSScreen?) {
-        if hudPanel == nil {
-            let panel = NonFocusingHUDPanel(
-                contentRect: NSRect(x: 0, y: 0, width: 320, height: 60),
-                styleMask: [.borderless, .nonactivatingPanel],
-                backing: .buffered,
-                defer: false
-            )
-            panel.isReleasedWhenClosed = false
-            panel.level = .statusBar
-            panel.isOpaque = false
-            panel.backgroundColor = .clear
-            panel.hasShadow = true
-            // Never let the status HUD take keyboard focus away from the app being automated:
-            // it can't become the key/main window, and only ever takes focus if a control truly needs it.
-            panel.becomesKeyOnlyIfNeeded = true
-            // Purely visual overlay: let every mouse event (including the macro's own synthetic
-            // clicks/drags) pass straight through to the app underneath. Otherwise a click or drag
-            // whose coordinates land under the HUD hits the HUD instead of the target. Stopping is
-            // done with ⌘Esc (a session-level event tap, independent of this window).
-            panel.ignoresMouseEvents = true
-            // Critical: NSPanel hides itself when the app deactivates (default true). The whole point
-            // is for the HUD to stay visible while the macro drives OTHER apps, so disable that.
-            panel.hidesOnDeactivate = false
-            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle, .stationary]
-            panel.contentView = NSHostingView(
-                rootView: ExecutionHUDView(executor: state.macroExecutor)
-            )
-            hudPanel = panel
-        }
-
-        guard let panel = hudPanel, let hosting = panel.contentView else { return }
-        hosting.layoutSubtreeIfNeeded()
-        var size = hosting.fittingSize
-        if size.width < 100 || size.height < 20 { size = NSSize(width: 320, height: 60) }
-        panel.setContentSize(size)
-
-        let margin: CGFloat = 20
-        let frame = (screen ?? NSScreen.screens.first)?.visibleFrame
-            ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        panel.setFrameOrigin(NSPoint(
-            x: frame.maxX - size.width - margin,
-            y: frame.maxY - size.height - margin
-        ))
-        panel.orderFrontRegardless()
-    }
-}
-
-/// Status HUD panel that can never steal keyboard focus from the app a macro is driving.
-private final class NonFocusingHUDPanel: NSPanel {
-    override var canBecomeKey: Bool { false }
-    override var canBecomeMain: Bool { false }
 }
 
 private struct EditorRoot: View {

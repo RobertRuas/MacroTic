@@ -5,6 +5,10 @@ import Foundation
 /// user-facing novelties shown as bullets. Versions without an entry show a generic "atualizado" message.
 enum ReleaseNotes {
     static let byVersion: [String: [String]] = [
+        "0.2.10": [
+            "Removemos a telinha de status que aparecia durante a execução — ela podia interferir nas ações da macro. Agora o MacroTic apenas sai da frente enquanto executa.",
+            "Para parar uma macro em execução, use ⌘Esc.",
+        ],
         "0.2.9": [
             "Arrastar e soltar imagens ficou mais confiável: o clique inicial segura o item por mais tempo e o arrasto começa com um movimento lento e gradual, para o aplicativo realmente levantar a imagem antes de levá-la ao destino.",
         ],

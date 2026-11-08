@@ -179,7 +179,7 @@ final class MainWindowController: NSObject, NSWindowDelegate, NSToolbarDelegate 
 
     private func showHUD(on screen: NSScreen?) {
         if hudPanel == nil {
-            let panel = NSPanel(
+            let panel = NonFocusingHUDPanel(
                 contentRect: NSRect(x: 0, y: 0, width: 320, height: 60),
                 styleMask: [.borderless, .nonactivatingPanel],
                 backing: .buffered,
@@ -190,6 +190,9 @@ final class MainWindowController: NSObject, NSWindowDelegate, NSToolbarDelegate 
             panel.isOpaque = false
             panel.backgroundColor = .clear
             panel.hasShadow = true
+            // Never let the status HUD take keyboard focus away from the app being automated:
+            // it can't become the key/main window, and only ever takes focus if a control truly needs it.
+            panel.becomesKeyOnlyIfNeeded = true
             // Critical: NSPanel hides itself when the app deactivates (default true). The whole point
             // is for the HUD to stay visible while the macro drives OTHER apps, so disable that.
             panel.hidesOnDeactivate = false
@@ -218,6 +221,12 @@ final class MainWindowController: NSObject, NSWindowDelegate, NSToolbarDelegate 
         ))
         panel.orderFrontRegardless()
     }
+}
+
+/// Status HUD panel that can never steal keyboard focus from the app a macro is driving.
+private final class NonFocusingHUDPanel: NSPanel {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
 }
 
 private struct EditorRoot: View {

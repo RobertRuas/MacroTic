@@ -32,7 +32,19 @@ struct DragAndDropAction: MacroAction {
 
         guard let mouseDown = CGEvent(mouseEventSource: source, mouseType: .leftMouseDown, mouseCursorPosition: startPoint, mouseButton: .left) else { return false }
         mouseDown.post(tap: .cghidEventTap)
-        try? await Task.sleep(for: .milliseconds(120))
+        // Hold the press in place so the target under the cursor registers the grab
+        // before any movement — releasing/moving too soon makes the drag silently fail.
+        try? await Task.sleep(for: .milliseconds(220))
+
+        // A tiny initial drag nudge "wakes up" apps that only begin a drag once the
+        // pointer actually moves while the button is down.
+        if !Task.isCancelled {
+            let nudge = CGPoint(x: startPoint.x + 1, y: startPoint.y + 1)
+            if let wake = CGEvent(mouseEventSource: source, mouseType: .leftMouseDragged, mouseCursorPosition: nudge, mouseButton: .left) {
+                wake.post(tap: .cghidEventTap)
+            }
+            try? await Task.sleep(for: .milliseconds(90))
+        }
 
         let dragSteps = 30
         var cancelled = false
@@ -49,12 +61,20 @@ struct DragAndDropAction: MacroAction {
             try? await Task.sleep(for: .milliseconds(12))
         }
 
+        // Settle exactly on the destination and dwell there before releasing — dropping the
+        // instant the cursor arrives can land before the target accepts the drag.
+        if !cancelled {
+            if let settle = CGEvent(mouseEventSource: source, mouseType: .leftMouseDragged, mouseCursorPosition: endPoint, mouseButton: .left) {
+                settle.post(tap: .cghidEventTap)
+            }
+        }
         // Always release the button pressed above, even if cancelled, to avoid a stuck drag.
-        try? await Task.sleep(for: .milliseconds(50))
+        try? await Task.sleep(for: .milliseconds(160))
         if let mouseUp = CGEvent(mouseEventSource: source, mouseType: .leftMouseUp, mouseCursorPosition: endPoint, mouseButton: .left) {
             mouseUp.post(tap: .cghidEventTap)
         }
-        try? await Task.sleep(for: .milliseconds(50))
+        // Don't exit immediately after releasing: let the drop fully commit before the next step.
+        try? await Task.sleep(for: .milliseconds(120))
         return !cancelled
     }
 }

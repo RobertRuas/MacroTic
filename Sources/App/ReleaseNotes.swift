@@ -5,6 +5,10 @@ import Foundation
 /// user-facing novelties shown as bullets. Versions without an entry show a generic "atualizado" message.
 enum ReleaseNotes {
     static let byVersion: [String: [String]] = [
+        "0.2.8": [
+            "A telinha de status durante a execução agora é apenas visual: ela deixa passar os cliques e arrastos da macro, então nunca mais atrapalha uma ação que acontece embaixo dela.",
+            "Para parar uma macro em execução, use ⌘Esc (indicado na própria telinha).",
+        ],
         "0.2.7": [
             "Arrastar e soltar mais confiável: o clique inicial é mantido por mais tempo antes do arrasto e a soltura não é imediata, garantindo que o destino reconheça a ação.",
             "A telinha de status durante a execução não rouba mais o foco do aplicativo que está sendo automatizado.",

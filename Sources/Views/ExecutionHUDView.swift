@@ -2,7 +2,6 @@ import SwiftUI
 
 struct ExecutionHUDView: View {
     let executor: MacroExecutor
-    let onStop: () -> Void
 
     private var statusLine: String {
         if case .running(let step, let total) = executor.state {
@@ -30,15 +29,17 @@ struct ExecutionHUDView: View {
 
             Spacer(minLength: 8)
 
-            Button(action: onStop) {
-                Label("Parar", systemImage: "stop.fill")
+            HStack(spacing: 5) {
+                Image(systemName: "stop.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.red)
+                Text("⌘Esc para parar")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.secondary)
             }
-            .controlSize(.small)
-            .tint(.red)
-
-            Text("⌘Esc")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(.red.opacity(0.12), in: Capsule())
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)

@@ -193,15 +193,17 @@ final class MainWindowController: NSObject, NSWindowDelegate, NSToolbarDelegate 
             // Never let the status HUD take keyboard focus away from the app being automated:
             // it can't become the key/main window, and only ever takes focus if a control truly needs it.
             panel.becomesKeyOnlyIfNeeded = true
+            // Purely visual overlay: let every mouse event (including the macro's own synthetic
+            // clicks/drags) pass straight through to the app underneath. Otherwise a click or drag
+            // whose coordinates land under the HUD hits the HUD instead of the target. Stopping is
+            // done with ⌘Esc (a session-level event tap, independent of this window).
+            panel.ignoresMouseEvents = true
             // Critical: NSPanel hides itself when the app deactivates (default true). The whole point
             // is for the HUD to stay visible while the macro drives OTHER apps, so disable that.
             panel.hidesOnDeactivate = false
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle, .stationary]
             panel.contentView = NSHostingView(
-                rootView: ExecutionHUDView(
-                    executor: state.macroExecutor,
-                    onStop: { [weak self] in self?.state.stopMacro() }
-                )
+                rootView: ExecutionHUDView(executor: state.macroExecutor)
             )
             hudPanel = panel
         }

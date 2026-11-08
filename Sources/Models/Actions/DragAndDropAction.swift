@@ -4,6 +4,7 @@ import Foundation
 struct DragAndDropAction: MacroAction {
     func execute(step: MacroStep) async -> Bool {
         let source = CGEventSource(stateID: .hidSystemState)
+        source?.localEventsSuppressionInterval = 0
         let startPoint = CGPoint(x: step.dragStartX, y: step.dragStartY)
         let endPoint = CGPoint(x: step.dragEndX, y: step.dragEndY)
 
@@ -28,9 +29,23 @@ struct DragAndDropAction: MacroAction {
             }
         }
 
-        try? await Task.sleep(for: .milliseconds(80))
+        // Warp exactly to the start, re-associate and settle, then post an explicit move AT the
+        // start point so the window/item under the cursor registers hover and focus BEFORE the
+        // press. Without this, a mouseDown on a not-yet-focused window (e.g. the first grab after
+        // a scroll or a big cursor jump) is swallowed as a mere window-raise and the item is never
+        // picked up — exactly what ClickAction already does for clicks.
+        CGWarpMouseCursorPosition(startPoint)
+        CGAssociateMouseAndMouseCursorPosition(1)
+        try? await Task.sleep(for: .milliseconds(60))
+        if Task.isCancelled { return false }
+        if let settleMove = CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: startPoint, mouseButton: .left) {
+            settleMove.post(tap: .cghidEventTap)
+        }
+        try? await Task.sleep(for: .milliseconds(40))
+        if Task.isCancelled { return false }
 
         guard let mouseDown = CGEvent(mouseEventSource: source, mouseType: .leftMouseDown, mouseCursorPosition: startPoint, mouseButton: .left) else { return false }
+        mouseDown.setIntegerValueField(.mouseEventClickState, value: 1)
         mouseDown.post(tap: .cghidEventTap)
         // Hold the press in place so the target under the cursor registers the grab
         // before any movement — releasing/moving too soon makes the drag silently fail.
@@ -71,6 +86,7 @@ struct DragAndDropAction: MacroAction {
         // Always release the button pressed above, even if cancelled, to avoid a stuck drag.
         try? await Task.sleep(for: .milliseconds(160))
         if let mouseUp = CGEvent(mouseEventSource: source, mouseType: .leftMouseUp, mouseCursorPosition: endPoint, mouseButton: .left) {
+            mouseUp.setIntegerValueField(.mouseEventClickState, value: 1)
             mouseUp.post(tap: .cghidEventTap)
         }
         // Don't exit immediately after releasing: let the drop fully commit before the next step.

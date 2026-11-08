@@ -5,6 +5,9 @@ import Foundation
 /// user-facing novelties shown as bullets. Versions without an entry show a generic "atualizado" message.
 enum ReleaseNotes {
     static let byVersion: [String: [String]] = [
+        "0.2.11": [
+            "Corrigido o arrasto que falhava ao pegar itens logo após um scroll (ou um salto grande do cursor): agora o arrasto foca e posiciona o cursor sobre o item antes de pressionar, então a imagem é realmente agarrada.",
+        ],
         "0.2.10": [
             "Removemos a telinha de status que aparecia durante a execução — ela podia interferir nas ações da macro. Agora o MacroTic apenas sai da frente enquanto executa.",
             "Para parar uma macro em execução, use ⌘Esc.",

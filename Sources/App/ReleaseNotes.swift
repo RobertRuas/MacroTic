@@ -5,6 +5,9 @@ import Foundation
 /// user-facing novelties shown as bullets. Versions without an entry show a generic "atualizado" message.
 enum ReleaseNotes {
     static let byVersion: [String: [String]] = [
+        "0.2.12": [
+            "Nova ação: Número aleatório. Digita um número inteiro sorteado entre um mínimo e um máximo que você define — disponível no menu Adicionar ação e na barra rápida.",
+        ],
         "0.2.11": [
             "Corrigido o arrasto que falhava ao pegar itens logo após um scroll (ou um salto grande do cursor): agora o arrasto foca e posiciona o cursor sobre o item antes de pressionar, então a imagem é realmente agarrada.",
         ],

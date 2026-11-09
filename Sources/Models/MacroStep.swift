@@ -79,11 +79,15 @@ struct MacroStep: Identifiable, Hashable, Codable {
 
     var textMode: TextInputMode
 
+    var randomMin: Int
+    var randomMax: Int
+
     enum CodingKeys: String, CodingKey {
         case id, kind, value, delay, clickX, clickY
         case dragStartX, dragStartY, dragEndX, dragEndY
         case scrollDirection, scrollAmount, scrollMovesMouse, scrollX, scrollY, scrollUnit, scrollStepDelayMs
         case textMode
+        case randomMin, randomMax
     }
 
     init(from decoder: Decoder) throws {
@@ -106,6 +110,8 @@ struct MacroStep: Identifiable, Hashable, Codable {
         scrollUnit = try c.decodeIfPresent(ScrollUnit.self, forKey: .scrollUnit) ?? .lines
         scrollStepDelayMs = try c.decodeIfPresent(Int.self, forKey: .scrollStepDelayMs) ?? 25
         textMode = try c.decodeIfPresent(TextInputMode.self, forKey: .textMode) ?? .typing
+        randomMin = try c.decodeIfPresent(Int.self, forKey: .randomMin) ?? 1
+        randomMax = try c.decodeIfPresent(Int.self, forKey: .randomMax) ?? 100
     }
 
     init(kind: MacroStepKind) {
@@ -127,6 +133,8 @@ struct MacroStep: Identifiable, Hashable, Codable {
         self.scrollUnit = .lines
         self.scrollStepDelayMs = 25
         self.textMode = .typing
+        self.randomMin = 1
+        self.randomMax = 100
     }
 
     var scrollSummary: String {
@@ -171,6 +179,8 @@ struct MacroStep: Identifiable, Hashable, Codable {
             return value.isEmpty ? "texto vazio" : nil
         case .launchApp:
             return value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "janela não selecionada" : nil
+        case .randomNumber:
+            return randomMin > randomMax ? "mínimo maior que o máximo" : nil
         case .scroll, .delay:
             return nil
         }
@@ -198,6 +208,8 @@ extension MacroStep {
         copy.scrollUnit = scrollUnit
         copy.scrollStepDelayMs = scrollStepDelayMs
         copy.textMode = textMode
+        copy.randomMin = randomMin
+        copy.randomMax = randomMax
         return copy
     }
 

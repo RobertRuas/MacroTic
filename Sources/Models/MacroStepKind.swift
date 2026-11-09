@@ -8,6 +8,7 @@ enum MacroStepKind: String, CaseIterable, Identifiable, Codable {
     case launchApp
     case dragAndDrop
     case scroll
+    case randomNumber
 
     var id: String { rawValue }
 
@@ -20,6 +21,7 @@ enum MacroStepKind: String, CaseIterable, Identifiable, Codable {
         case .launchApp: "Selecionar janela"
         case .dragAndDrop: "Clicar, arrastar e soltar"
         case .scroll: "Scroll"
+        case .randomNumber: "Número aleatório"
         }
     }
 
@@ -32,6 +34,7 @@ enum MacroStepKind: String, CaseIterable, Identifiable, Codable {
         case .launchApp: "macwindow"
         case .dragAndDrop: "arrow.up.and.down.and.arrow.left.and.right"
         case .scroll: "scroll"
+        case .randomNumber: "dice"
         }
     }
 
@@ -44,6 +47,7 @@ enum MacroStepKind: String, CaseIterable, Identifiable, Codable {
         case .launchApp: .pink
         case .dragAndDrop: .indigo
         case .scroll: .cyan
+        case .randomNumber: .yellow
         }
     }
 
@@ -56,6 +60,7 @@ enum MacroStepKind: String, CaseIterable, Identifiable, Codable {
         case .launchApp: "Selecionar janela"
         case .dragAndDrop: "Clique e arraste na tela"
         case .scroll: ""
+        case .randomNumber: ""
         }
     }
 
@@ -72,4 +77,6 @@ enum MacroStepKind: String, CaseIterable, Identifiable, Codable {
     var usesWindowPicker: Bool { self == .launchApp }
 
     var usesTextField: Bool { self == .typeText }
+
+    var usesRandomNumber: Bool { self == .randomNumber }
 }

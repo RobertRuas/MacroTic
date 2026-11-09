@@ -160,6 +160,7 @@ struct ManualView: View {
         case .launchApp: return "Traz uma janela específica para a frente antes de continuar."
         case .dragAndDrop: return "Clica, arrasta de um ponto a outro e solta — ideal para mover itens."
         case .scroll: return "Rola a tela em qualquer direção, em linhas ou pixels."
+        case .randomNumber: return "Digita um número inteiro aleatório entre um mínimo e um máximo."
         }
     }
 

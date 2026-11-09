@@ -207,8 +207,60 @@ struct MacroStepRowView: View {
             scrollEditor
         } else if kind.usesWindowPicker {
             windowEditor
+        } else if kind.usesRandomNumber {
+            randomNumberEditor
         } else {
             textEditor
+        }
+    }
+
+    private var randomNumberEditor: some View {
+        HStack(spacing: 6) {
+            Text("Entre")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            TextField(
+                "1",
+                value: Binding(
+                    get: { step.wrappedValue.randomMin },
+                    set: { step.wrappedValue.randomMin = $0 }
+                ),
+                format: .number.grouping(.never)
+            )
+            .textFieldStyle(.roundedBorder)
+            .multilineTextAlignment(.trailing)
+            .monospacedDigit()
+            .frame(width: 70)
+            .controlSize(.small)
+
+            Text("e")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            TextField(
+                "100",
+                value: Binding(
+                    get: { step.wrappedValue.randomMax },
+                    set: { step.wrappedValue.randomMax = $0 }
+                ),
+                format: .number.grouping(.never)
+            )
+            .textFieldStyle(.roundedBorder)
+            .multilineTextAlignment(.trailing)
+            .monospacedDigit()
+            .frame(width: 70)
+            .controlSize(.small)
+
+            Picker("", selection: step.textMode) {
+                ForEach(TextInputMode.allCases) { Text($0.title).tag($0) }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .frame(width: 130)
+            .controlSize(.small)
+
+            Spacer(minLength: 0)
         }
     }
 

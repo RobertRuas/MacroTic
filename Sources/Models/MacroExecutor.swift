@@ -84,6 +84,7 @@ final class MacroExecutor {
         .launchApp: FocusWindowAction(),
         .dragAndDrop: DragAndDropAction(),
         .scroll: ScrollAction(),
+        .randomNumber: RandomNumberAction(),
     ]
 
     var isRunning: Bool {
